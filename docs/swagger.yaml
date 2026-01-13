@@ -1,5 +1,5 @@
 definitions:
-  http.ApiResponse:
+  container.ApiResponse:
     properties:
       data: {}
       message:
@@ -8,7 +8,7 @@ definitions:
         description: success | fail
         type: string
     type: object
-  http.CreateContainerRequest:
+  container.CreateContainerRequest:
     properties:
       command:
         example:
@@ -19,10 +19,10 @@ definitions:
           type: string
         type: array
       image:
-        example: alpine
+        example: alpine:latest
         type: string
     type: object
-  http.ExecContainerRequest:
+  container.ExecContainerRequest:
     properties:
       command:
         example:
@@ -36,11 +36,41 @@ definitions:
         example: true
         type: boolean
     type: object
-  http.StartContainerRequest:
+  container.StartContainerRequest:
     properties:
       interactive:
         example: true
         type: boolean
+    type: object
+  http.ApiResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      status:
+        description: success | fail
+        type: string
+    type: object
+  image.ApiResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      status:
+        description: success | fail
+        type: string
+    type: object
+  image.PullImageRequest:
+    properties:
+      arch:
+        example: arm64
+        type: string
+      image:
+        example: alpine:latest
+        type: string
+      os:
+        example: linux
+        type: string
     type: object
 info:
   contact: {}
@@ -56,14 +86,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/http.CreateContainerRequest'
+          $ref: '#/definitions/container.CreateContainerRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/http.ApiResponse'
+            $ref: '#/definitions/container.ApiResponse'
       summary: Create a container
       tags:
       - containers
@@ -80,7 +110,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/http.ApiResponse'
+            $ref: '#/definitions/container.ApiResponse'
       summary: delete a container
       tags:
       - containers
@@ -98,12 +128,12 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/http.ExecContainerRequest'
+          $ref: '#/definitions/container.ExecContainerRequest'
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/http.ApiResponse'
+            $ref: '#/definitions/container.ApiResponse'
       summary: exec a container
       tags:
       - containers
@@ -121,12 +151,12 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/http.StartContainerRequest'
+          $ref: '#/definitions/container.StartContainerRequest'
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/http.ApiResponse'
+            $ref: '#/definitions/container.ApiResponse'
       summary: start a container
       tags:
       - containers
@@ -143,7 +173,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/http.ApiResponse'
+            $ref: '#/definitions/container.ApiResponse'
       summary: stop a container
       tags:
       - containers
@@ -158,4 +188,26 @@ paths:
       summary: apply hook
       tags:
       - Hooks
+  /v1/images:
+    post:
+      consumes:
+      - application/json
+      description: pull image from registry
+      parameters:
+      - description: Target Image
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/image.PullImageRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/image.ApiResponse'
+      summary: pull image
+      tags:
+      - image
 swagger: "2.0"

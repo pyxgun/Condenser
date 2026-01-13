@@ -49,8 +49,20 @@ func (s *ContainerService) Create(createParameter ServiceCreateModel) (string, e
 		return "", fmt.Errorf("setup cgroup subtree failed: %w", err)
 	}
 
+	// parse image string
+	imageParts := strings.SplitN(createParameter.Image, ":", 2)
+	imageRepo := imageParts[0]
+	var imageRef string
+	if len(imageParts) == 2 {
+		imageRef = imageParts[1]
+	} else {
+		imageRef = "latest"
+	}
+	// verify if the layers exist
+	// TODO: if the layers not exist, pull image
+
 	// 5. create spec (config.json)
-	if err := s.createContainerSpec(containerId, createParameter.Image, createParameter.Command); err != nil {
+	if err := s.createContainerSpec(containerId, imageRepo, imageRef, createParameter.Command); err != nil {
 		return "", fmt.Errorf("create spec failed: %w", err)
 	}
 
@@ -115,7 +127,7 @@ func (s *ContainerService) setupCgroupSubtree(containerId string) error {
 	return nil
 }
 
-func (s *ContainerService) createContainerSpec(containerId string, image string, command []string) error {
+func (s *ContainerService) createContainerSpec(containerId string, imageRepo, imageRef string, command []string) error {
 	// spec parametr
 	// rootfs
 	rootfs := filepath.Join(env.ContainerRootDir, containerId, "merged")
@@ -161,8 +173,7 @@ func (s *ContainerService) createContainerSpec(containerId string, image string,
 	// container dns
 	containerDns := []string{"8.8.8.8"}
 
-	// TODO: image layers retrieve from image bundle
-	imageLayer := []string{filepath.Join(env.LayerRootDir, image)}
+	imageLayer := []string{filepath.Join(env.LayerRootDir, "library_"+imageRepo, imageRef, "rootfs")}
 	upperDir := filepath.Join(env.ContainerRootDir, containerId, "diff")
 	workDir := filepath.Join(env.ContainerRootDir, containerId, "work")
 	outputDir := filepath.Join(env.ContainerRootDir, containerId)

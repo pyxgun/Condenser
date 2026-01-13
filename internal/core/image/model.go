@@ -1,29 +1,47 @@
 package image
 
-type ImageRef struct {
-	Registry   string
-	Repository string
-	Reference  string
-	Os         string
-	Arch       string
+type ServicePullModel struct {
+	Image string
+	Os    string
+	Arch  string
 }
 
-type Descriptor struct {
-	MediaType string
-	Digest    string
-	Size      int64
+type imageRefParts struct {
+	registry   string
+	repository string
+	reference  string
 }
 
-type Manifest struct {
-	MediaType string
-	Digest    string
-	Config    Descriptor
-	Layers    []Descriptor
+type tokenResp struct {
+	Token       string `json:"token"`
+	AccessToken string `json:"access_token"`
 }
 
-type PullResult struct {
-	ImageId    string
-	Ref        string
-	Manifest   string
-	LayerCount int
+type manifestList struct {
+	SchemaVersion int `json:"schemaVersion"`
+	MediaType     string
+	Manifests     []struct {
+		MediaType string `json:"mediaType"`
+		Digest    string `json:"digest"`
+		Platform  struct {
+			OS           string `json:"os"`
+			Architecture string `json:"architecture"`
+			Variant      string `json:"variant,omitempty"`
+		} `json:"platform"`
+	} `json:"manifests"`
+}
+
+type singleManifest struct {
+	SchemaVersion int    `json:"schemaVersion"`
+	MediaType     string `json:"mediaType"`
+	Config        struct {
+		MediaType string `json:"mediaType"`
+		Size      int64  `json:"size"`
+		Digest    string `json:"digest"`
+	} `json:"config"`
+	Layers []struct {
+		MediaType string `json:"mediaType"`
+		Size      int64  `json:"size"`
+		Digest    string `json:"digest"`
+	} `json:"layers"`
 }

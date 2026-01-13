@@ -3,6 +3,9 @@ package http
 import (
 	_ "condenser/docs"
 
+	containerHandler "condenser/internal/api/http/container"
+	hookHandler "condenser/internal/api/http/hook"
+	imageHandler "condenser/internal/api/http/image"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
@@ -16,7 +19,8 @@ import (
 
 func NewApiRouter() *chi.Mux {
 	r := chi.NewRouter()
-	handler := NewRequestHandler()
+	containerHandler := containerHandler.NewRequestHandler()
+	imageHandler := imageHandler.NewRequestHandler()
 
 	// middleware
 	r.Use(middleware.RequestID)
@@ -28,18 +32,21 @@ func NewApiRouter() *chi.Mux {
 
 	// == v1 ==
 	// == containers ==
-	r.Post("/v1/containers", handler.CreateContainer)                                // create container
-	r.Post("/v1/containers/{containerId}/actions/start", handler.StartContainer)     // start container
-	r.Post("/v1/containers/{containerId}/actions/stop", handler.StopContainer)       // stop container
-	r.Post("/v1/containers/{containerId}/actions/exec", handler.ExecContainer)       // exec container
-	r.Delete("/v1/containers/{containerId}/actions/delete", handler.DeleteContainer) // delete container
+	r.Post("/v1/containers", containerHandler.CreateContainer)                                // create container
+	r.Post("/v1/containers/{containerId}/actions/start", containerHandler.StartContainer)     // start container
+	r.Post("/v1/containers/{containerId}/actions/stop", containerHandler.StopContainer)       // stop container
+	r.Post("/v1/containers/{containerId}/actions/exec", containerHandler.ExecContainer)       // exec container
+	r.Delete("/v1/containers/{containerId}/actions/delete", containerHandler.DeleteContainer) // delete container
+
+	// == images ==
+	r.Post("/v1/images", imageHandler.PullImage)
 
 	return r
 }
 
 func NewHookRouter() *chi.Mux {
 	r := chi.NewRouter()
-	handler := NewRequestHandler()
+	hookHandler := hookHandler.NewRequestHandler()
 
 	// middleware
 	r.Use(middleware.RequestID)
@@ -47,7 +54,7 @@ func NewHookRouter() *chi.Mux {
 	r.Use(middleware.Recoverer)
 
 	// == hook ==
-	r.Post("/v1/hooks/droplet", handler.ApplyHook)
+	r.Post("/v1/hooks/droplet", hookHandler.ApplyHook)
 
 	return r
 }

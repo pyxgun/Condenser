@@ -1,8 +1,8 @@
-package http
+package container
 
 // == create ==
 type CreateContainerRequest struct {
-	Image   string   `json:"image" example:"alpine"`
+	Image   string   `json:"image" example:"alpine:latest"`
 	Command []string `json:"command,omitempty" example:"'/bin/sh','-c','echo hello; sleep 60'"`
 }
 

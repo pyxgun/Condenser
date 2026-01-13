@@ -1,10 +1,8 @@
-package http
+package container
 
 import (
 	"condenser/internal/core/container"
-	"condenser/internal/core/hook"
 	"encoding/json"
-	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -12,14 +10,12 @@ import (
 
 func NewRequestHandler() *RequestHandler {
 	return &RequestHandler{
-		serviceHandler:     container.NewContaierService(),
-		hookServiceHandler: hook.NewHookService(),
+		serviceHandler: container.NewContaierService(),
 	}
 }
 
 type RequestHandler struct {
-	serviceHandler     container.ContainerServiceHandler
-	hookServiceHandler hook.HookServiceHandler
+	serviceHandler container.ContainerServiceHandler
 }
 
 // CreateContainer godoc
@@ -175,34 +171,6 @@ func (h *RequestHandler) DeleteContainer(w http.ResponseWriter, r *http.Request)
 
 	// encode response
 	h.responsdSuccess(w, http.StatusOK, "container deleted", DeleteContainerResponse{Id: result})
-}
-
-// ApplyHook godoc
-// @Summary apply hook
-// @Description apply hook from droplet
-// @Tags Hooks
-// @Success 200 {object} ApiResponse
-// @Router /v1/hooks/droplet [post]
-func (h *RequestHandler) ApplyHook(w http.ResponseWriter, r *http.Request) {
-	eventType := r.Header.Get("X-Hook-Event")
-
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	if err != nil {
-		h.responsdFail(w, http.StatusBadRequest, "read hook body failed: "+err.Error(), nil)
-		return
-	}
-	var st hook.ServiceStateModel
-	if err := json.Unmarshal(body, &st); err != nil {
-		h.responsdFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), nil)
-		return
-	}
-
-	// service: hook
-	if err := h.hookServiceHandler.UpdateCsm(st, eventType); err != nil {
-		h.responsdFail(w, http.StatusInternalServerError, "service hook failed: "+err.Error(), nil)
-	}
-
-	h.responsdSuccess(w, http.StatusOK, "hook applied", nil)
 }
 
 func (h *RequestHandler) decodeRequestBody(r *http.Request, v any) error {

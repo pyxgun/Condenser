@@ -35,7 +35,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.CreateContainerRequest"
+                            "$ref": "#/definitions/container.CreateContainerRequest"
                         }
                     }
                 ],
@@ -43,7 +43,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiResponse"
+                            "$ref": "#/definitions/container.ApiResponse"
                         }
                     }
                 }
@@ -69,7 +69,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiResponse"
+                            "$ref": "#/definitions/container.ApiResponse"
                         }
                     }
                 }
@@ -96,7 +96,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.ExecContainerRequest"
+                            "$ref": "#/definitions/container.ExecContainerRequest"
                         }
                     }
                 ],
@@ -104,7 +104,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiResponse"
+                            "$ref": "#/definitions/container.ApiResponse"
                         }
                     }
                 }
@@ -131,7 +131,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.StartContainerRequest"
+                            "$ref": "#/definitions/container.StartContainerRequest"
                         }
                     }
                 ],
@@ -139,7 +139,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiResponse"
+                            "$ref": "#/definitions/container.ApiResponse"
                         }
                     }
                 }
@@ -165,7 +165,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiResponse"
+                            "$ref": "#/definitions/container.ApiResponse"
                         }
                     }
                 }
@@ -187,10 +187,44 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/v1/images": {
+            "post": {
+                "description": "pull image from registry",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "image"
+                ],
+                "summary": "pull image",
+                "parameters": [
+                    {
+                        "description": "Target Image",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/image.PullImageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/image.ApiResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
-        "http.ApiResponse": {
+        "container.ApiResponse": {
             "type": "object",
             "properties": {
                 "data": {},
@@ -203,7 +237,7 @@ const docTemplate = `{
                 }
             }
         },
-        "http.CreateContainerRequest": {
+        "container.CreateContainerRequest": {
             "type": "object",
             "properties": {
                 "command": {
@@ -219,11 +253,11 @@ const docTemplate = `{
                 },
                 "image": {
                     "type": "string",
-                    "example": "alpine"
+                    "example": "alpine:latest"
                 }
             }
         },
-        "http.ExecContainerRequest": {
+        "container.ExecContainerRequest": {
             "type": "object",
             "properties": {
                 "command": {
@@ -243,12 +277,55 @@ const docTemplate = `{
                 }
             }
         },
-        "http.StartContainerRequest": {
+        "container.StartContainerRequest": {
             "type": "object",
             "properties": {
                 "interactive": {
                     "type": "boolean",
                     "example": true
+                }
+            }
+        },
+        "http.ApiResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "success | fail",
+                    "type": "string"
+                }
+            }
+        },
+        "image.ApiResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "success | fail",
+                    "type": "string"
+                }
+            }
+        },
+        "image.PullImageRequest": {
+            "type": "object",
+            "properties": {
+                "arch": {
+                    "type": "string",
+                    "example": "arm64"
+                },
+                "image": {
+                    "type": "string",
+                    "example": "alpine:latest"
+                },
+                "os": {
+                    "type": "string",
+                    "example": "linux"
                 }
             }
         }

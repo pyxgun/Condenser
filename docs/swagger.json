@@ -24,7 +24,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.CreateContainerRequest"
+                            "$ref": "#/definitions/container.CreateContainerRequest"
                         }
                     }
                 ],
@@ -32,7 +32,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiResponse"
+                            "$ref": "#/definitions/container.ApiResponse"
                         }
                     }
                 }
@@ -58,7 +58,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiResponse"
+                            "$ref": "#/definitions/container.ApiResponse"
                         }
                     }
                 }
@@ -85,7 +85,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.ExecContainerRequest"
+                            "$ref": "#/definitions/container.ExecContainerRequest"
                         }
                     }
                 ],
@@ -93,7 +93,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiResponse"
+                            "$ref": "#/definitions/container.ApiResponse"
                         }
                     }
                 }
@@ -120,7 +120,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.StartContainerRequest"
+                            "$ref": "#/definitions/container.StartContainerRequest"
                         }
                     }
                 ],
@@ -128,7 +128,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiResponse"
+                            "$ref": "#/definitions/container.ApiResponse"
                         }
                     }
                 }
@@ -154,7 +154,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiResponse"
+                            "$ref": "#/definitions/container.ApiResponse"
                         }
                     }
                 }
@@ -176,10 +176,44 @@
                     }
                 }
             }
+        },
+        "/v1/images": {
+            "post": {
+                "description": "pull image from registry",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "image"
+                ],
+                "summary": "pull image",
+                "parameters": [
+                    {
+                        "description": "Target Image",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/image.PullImageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/image.ApiResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
-        "http.ApiResponse": {
+        "container.ApiResponse": {
             "type": "object",
             "properties": {
                 "data": {},
@@ -192,7 +226,7 @@
                 }
             }
         },
-        "http.CreateContainerRequest": {
+        "container.CreateContainerRequest": {
             "type": "object",
             "properties": {
                 "command": {
@@ -208,11 +242,11 @@
                 },
                 "image": {
                     "type": "string",
-                    "example": "alpine"
+                    "example": "alpine:latest"
                 }
             }
         },
-        "http.ExecContainerRequest": {
+        "container.ExecContainerRequest": {
             "type": "object",
             "properties": {
                 "command": {
@@ -232,12 +266,55 @@
                 }
             }
         },
-        "http.StartContainerRequest": {
+        "container.StartContainerRequest": {
             "type": "object",
             "properties": {
                 "interactive": {
                     "type": "boolean",
                     "example": true
+                }
+            }
+        },
+        "http.ApiResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "success | fail",
+                    "type": "string"
+                }
+            }
+        },
+        "image.ApiResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "success | fail",
+                    "type": "string"
+                }
+            }
+        },
+        "image.PullImageRequest": {
+            "type": "object",
+            "properties": {
+                "arch": {
+                    "type": "string",
+                    "example": "arm64"
+                },
+                "image": {
+                    "type": "string",
+                    "example": "alpine:latest"
+                },
+                "os": {
+                    "type": "string",
+                    "example": "linux"
                 }
             }
         }
