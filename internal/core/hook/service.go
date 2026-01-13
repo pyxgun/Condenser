@@ -1,8 +1,8 @@
 package hook
 
 import (
-	"condenser/internal/csm"
 	"condenser/internal/env"
+	"condenser/internal/store/csm"
 	"fmt"
 )
 

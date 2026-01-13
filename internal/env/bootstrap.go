@@ -2,8 +2,8 @@ package env
 
 import (
 	"bufio"
-	"condenser/internal/csm"
-	"condenser/internal/ipam"
+	"condenser/internal/store/csm"
+	"condenser/internal/store/ipam"
 	"condenser/internal/utils"
 	"fmt"
 	"os"
@@ -37,13 +37,13 @@ func (m *BootstrapManager) SetupRuntime() error {
 		return err
 	}
 
-	// 3. setup network
-	if err := m.setupNetwork(); err != nil {
+	// 4. setup IPAM (IP Address Managemant)
+	if err := m.setupIpam(); err != nil {
 		return err
 	}
 
-	// 4. setup IPAM (IP Address Managemant)
-	if err := m.setupIpam(); err != nil {
+	// 3. setup network
+	if err := m.setupNetwork(); err != nil {
 		return err
 	}
 
@@ -168,80 +168,67 @@ func (m *BootstrapManager) setupNetwork() error {
 }
 
 func (m *BootstrapManager) createBridgeInterface() error {
-	// check if bridge interface already exist
-	check := m.commandFactory.Command("ip", "link", "show", BridgeInterface)
-	if err := check.Run(); err == nil {
-		// bridge interface already exist
-		return nil
+	networkList, err := m.ipamStoreHandler.GetNetworkList()
+	if err != nil {
+		return err
 	}
 
-	// create bridge interface
-	add := m.commandFactory.Command("ip", "link", "add", BridgeInterface, "type", "bridge")
-	if err := add.Run(); err != nil {
-		return fmt.Errorf("ip link add: %w", err)
-	}
+	for _, n := range networkList {
+		// check if bridge interface already exist
+		check := m.commandFactory.Command("ip", "link", "show", n.Interface)
+		if err := check.Run(); err == nil {
+			// bridge interface already exist
+			return nil
+		}
 
-	// assign address
-	assign := m.commandFactory.Command("ip", "addr", "add", BridgeInterfaceAddr, "dev", BridgeInterface)
-	if err := assign.Run(); err != nil {
-		return fmt.Errorf("ip addr add: %w", err)
-	}
+		// create bridge interface
+		add := m.commandFactory.Command("ip", "link", "add", n.Interface, "type", "bridge")
+		if err := add.Run(); err != nil {
+			return fmt.Errorf("ip link add: %w", err)
+		}
 
-	// up link
-	up := m.commandFactory.Command("ip", "link", "set", BridgeInterface, "up")
-	if err := up.Run(); err != nil {
-		return fmt.Errorf("ip link up: %w", err)
+		// assign address
+		assign := m.commandFactory.Command("ip", "addr", "add", n.Address, "dev", n.Interface)
+		if err := assign.Run(); err != nil {
+			return fmt.Errorf("ip addr add: %w", err)
+		}
+
+		// up link
+		up := m.commandFactory.Command("ip", "link", "set", n.Interface, "up")
+		if err := up.Run(); err != nil {
+			return fmt.Errorf("ip link up: %w", err)
+		}
 	}
 	return nil
 }
 
 func (m *BootstrapManager) createMasqueradeRule() error {
-	hostInterface, err := m.getDefaultInterfaceIpv4()
+	hostInterface, err := m.ipamStoreHandler.GetDefaultInterface()
 	if err != nil {
 		return err
 	}
+	runtimeSubnet, err := m.ipamStoreHandler.GetRuntimeSubnet()
+	if err != nil {
+		return err
+	}
+
 	// check if rule already exist
-	check := m.commandFactory.Command("iptables", "-t", "nat", "-C", "POSTROUTING", "-s", RuntimeSubnet, "-o", hostInterface, "-j", "MASQUERADE")
+	check := m.commandFactory.Command("iptables", "-t", "nat", "-C", "POSTROUTING", "-s", runtimeSubnet, "-o", hostInterface, "-j", "MASQUERADE")
 	if err := check.Run(); err == nil {
 		// rule already exist
 		return nil
 	}
 
 	// add rule
-	add := m.commandFactory.Command("iptables", "-t", "nat", "-A", "POSTROUTING", "-s", RuntimeSubnet, "-o", hostInterface, "-j", "MASQUERADE")
+	add := m.commandFactory.Command("iptables", "-t", "nat", "-A", "POSTROUTING", "-s", runtimeSubnet, "-o", hostInterface, "-j", "MASQUERADE")
 	if err := add.Run(); err != nil {
 		return fmt.Errorf("iptables add: %w", err)
 	}
 	return nil
 }
 
-func (m *BootstrapManager) getDefaultInterfaceIpv4() (string, error) {
-	cmd := m.commandFactory.Command("ip", "-4", "route", "show", "default")
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("run ip route: %w", err)
-	}
-
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) == "" {
-		return "", fmt.Errorf("no defauilt route found (ipv4)")
-	}
-
-	// retrieve device name
-	fields := strings.Fields(lines[0])
-	for i := 0; i < len(fields)-1; i++ {
-		if fields[i] == "dev" {
-			return fields[i+1], nil
-		}
-	}
-	return "", fmt.Errorf("cannot find dev in: %q", lines[0])
-}
-
 func (m *BootstrapManager) setupIpam() error {
-	subnet := RuntimeSubnet
-	gateway := strings.Split(BridgeInterfaceAddr, "/")[0]
-
-	return m.ipamStoreHandler.SetConfig(subnet, gateway)
+	return m.ipamStoreHandler.SetConfig()
 }
 
 func (m *BootstrapManager) setupCsm() error {

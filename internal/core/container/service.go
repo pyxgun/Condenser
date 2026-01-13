@@ -2,9 +2,9 @@ package container
 
 import (
 	"condenser/internal/env"
-	"condenser/internal/ipam"
 	"condenser/internal/runtime"
 	"condenser/internal/runtime/droplet"
+	"condenser/internal/store/ipam"
 	"condenser/internal/utils"
 	"fmt"
 	"path/filepath"
@@ -16,6 +16,7 @@ func NewContaierService() *ContainerService {
 		filesystemHandler: utils.NewFilesystemExecutor(),
 		commandFactory:    utils.NewCommandFactory(),
 		runtimeHandler:    droplet.NewDropletHandler(),
+		ipamStoreHandler:  ipam.NewIpamStore(env.IpamStorePath),
 		ipamHandler:       ipam.NewIpamManager(ipam.NewIpamStore(env.IpamStorePath)),
 	}
 }
@@ -24,6 +25,7 @@ type ContainerService struct {
 	filesystemHandler utils.FilesystemHandler
 	commandFactory    utils.CommandFactory
 	runtimeHandler    runtime.RuntimeHandler
+	ipamStoreHandler  ipam.IpamStoreHandler
 	ipamHandler       ipam.IpamHandler
 }
 
@@ -115,50 +117,106 @@ func (s *ContainerService) setupCgroupSubtree(containerId string) error {
 
 func (s *ContainerService) createContainerSpec(containerId string, image string, command []string) error {
 	// spec parametr
+	// rootfs
 	rootfs := filepath.Join(env.ContainerRootDir, containerId, "merged")
+
+	// cwd
 	cwd := "/" // TODO: retrieve from image bundle
+
+	// command
 	var cmd string
 	if len(command) != 0 {
 		cmd = strings.Join(command, " ")
 	} else {
 		cmd = "/bin/sh" // TODO: retrieve from image bundle
 	}
+
+	// namespace
 	namespace := []string{"mount", "network", "uts", "pid", "ipc", "user", "cgroup"}
+
+	// hostname
 	hostname := containerId
-	hostInterface, err := s.getDefaultInterfaceIpv4()
+
+	// host interface
+	hostInterface, err := s.ipamStoreHandler.GetDefaultInterface()
 	if err != nil {
 		return err
 	}
-	bridgeInterface := env.BridgeInterface
+
+	// bridge interface
+	// TODO: network option for specifing subnet
+	bridgeInterface := "raind0"
+
+	// container interface
 	containerInterface := "eth0"
-	containerInterfaceAddr, err := s.ipamHandler.Allocate(containerId)
+	// container interface address
+	containerInterfaceAddr, err := s.ipamHandler.Allocate(containerId, bridgeInterface)
 	if err != nil {
 		return err
 	}
 	containerInterfaceAddr = containerInterfaceAddr + "/24"
-	containerGateway := strings.Split(env.BridgeInterfaceAddr, "/")[0]
+	// container gateway
+	// TODO: network option for specifing subnet
+	containerGateway := strings.Split("10.166.0.254/24", "/")[0]
+	// container dns
 	containerDns := []string{"8.8.8.8"}
+
 	// TODO: image layers retrieve from image bundle
 	imageLayer := []string{filepath.Join(env.LayerRootDir, image)}
 	upperDir := filepath.Join(env.ContainerRootDir, containerId, "diff")
 	workDir := filepath.Join(env.ContainerRootDir, containerId, "work")
 	outputDir := filepath.Join(env.ContainerRootDir, containerId)
 
-	hookAddr := strings.Split(env.BridgeInterfaceAddr, "/")[0]
+	// hook
+	hookAddr, err := s.ipamStoreHandler.GetDefaultInterfaceAddr()
+	if err != nil {
+		return err
+	}
+	hookAddr = strings.Split(hookAddr, "/")[0]
 	createRuntimeHook := []string{
-		fmt.Sprintf("/usr/bin/curl,-sS,-X,POST,--fail-with-body,--connect-timeout,1,--max-time,2,-H,Content-Type: application/json,-H,X-Hook-Event: createRuntime,--data-binary,@-,http://%s:7756/v1/hooks/droplet", hookAddr),
+		strings.Join([]string{
+			"/usr/bin/curl", "-sS", "-X", "POST",
+			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
+			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: createRuntime",
+			"--data-binary", "@-",
+			"http://" + hookAddr + ":7756/v1/hooks/droplet",
+		}, ","),
 	}
 	createContainerHook := []string{
-		fmt.Sprintf("/usr/bin/curl,-sS,-X,POST,--fail-with-body,--connect-timeout,1,--max-time,2,-H,Content-Type: application/json,-H,X-Hook-Event: createContainer,--data-binary,@-,http://%s:7756/v1/hooks/droplet", hookAddr),
+		strings.Join([]string{
+			"/usr/bin/curl", "-sS", "-X", "POST",
+			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
+			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: createContainer",
+			"--data-binary", "@-",
+			"http://" + hookAddr + ":7756/v1/hooks/droplet",
+		}, ","),
 	}
 	poststartHook := []string{
-		fmt.Sprintf("/usr/bin/curl,-sS,-X,POST,--fail-with-body,--connect-timeout,1,--max-time,2,-H,Content-Type: application/json,-H,X-Hook-Event: poststart,--data-binary,@-,http://%s:7756/v1/hooks/droplet", hookAddr),
+		strings.Join([]string{
+			"/usr/bin/curl", "-sS", "-X", "POST",
+			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
+			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: poststart",
+			"--data-binary", "@-",
+			"http://" + hookAddr + ":7756/v1/hooks/droplet",
+		}, ","),
 	}
 	stopContainerHook := []string{
-		fmt.Sprintf("/usr/bin/curl,-sS,-X,POST,--fail-with-body,--connect-timeout,1,--max-time,2,-H,Content-Type: application/json,-H,X-Hook-Event: stopContainer,--data-binary,@-,http://%s:7756/v1/hooks/droplet", hookAddr),
+		strings.Join([]string{
+			"/usr/bin/curl", "-sS", "-X", "POST",
+			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
+			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: stopContainer",
+			"--data-binary", "@-",
+			"http://" + hookAddr + ":7756/v1/hooks/droplet",
+		}, ","),
 	}
 	poststopHook := []string{
-		fmt.Sprintf("/usr/bin/curl,-sS,-X,POST,--fail-with-body,--connect-timeout,1,--max-time,2,-H,Content-Type: application/json,-H,X-Hook-Event: poststop,--data-binary,@-,http://%s:7756/v1/hooks/droplet", hookAddr),
+		strings.Join([]string{
+			"/usr/bin/curl", "-sS", "-X", "POST",
+			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
+			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: poststop",
+			"--data-binary", "@-",
+			"http://" + hookAddr + ":7756/v1/hooks/droplet",
+		}, ","),
 	}
 
 	specParameter := runtime.SpecModel{
@@ -198,28 +256,6 @@ func (s *ContainerService) createContainer(containerId string) error {
 		return err
 	}
 	return nil
-}
-
-func (s *ContainerService) getDefaultInterfaceIpv4() (string, error) {
-	cmd := s.commandFactory.Command("ip", "-4", "route", "show", "default")
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("run ip route: %w", err)
-	}
-
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) == "" {
-		return "", fmt.Errorf("no defauilt route found (ipv4)")
-	}
-
-	// retrieve device name
-	fields := strings.Fields(lines[0])
-	for i := 0; i < len(fields)-1; i++ {
-		if fields[i] == "dev" {
-			return fields[i+1], nil
-		}
-	}
-	return "", fmt.Errorf("cannot find dev in: %q", lines[0])
 }
 
 // ===========

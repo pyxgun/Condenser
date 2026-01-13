@@ -5,7 +5,6 @@ import (
 	"condenser/internal/env"
 	"log"
 	"net/http"
-	"strings"
 )
 
 func main() {
@@ -21,7 +20,7 @@ func main() {
 	publicRouter := httpapi.NewApiRouter()
 
 	// hook (localhost only)
-	hookAddr := strings.Split(env.BridgeInterfaceAddr, "/")[0] + ":7756"
+	hookAddr := ":7756"
 	hookRouter := httpapi.NewHookRouter()
 
 	// execute router

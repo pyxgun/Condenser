@@ -3,6 +3,7 @@ package ipam
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -16,50 +17,53 @@ type IpamManager struct {
 	ipamStore *IpamStore
 }
 
-func (m *IpamManager) Allocate(containerId string) (string, error) {
+func (m *IpamManager) Allocate(containerId string, bridge string) (string, error) {
 	var allocated string
 
 	err := m.ipamStore.withLock(func(st *IpamState) error {
-		if st.Subnet == "" || st.Gateway == "" {
-			return fmt.Errorf("ipam not configured")
+		for _, p := range st.Pools {
+			if p.Interface == bridge {
+				if p.Subnet == "" || p.Address == "" {
+					return fmt.Errorf("ipam not configured")
+				}
+				_, ipnet, _ := net.ParseCIDR(p.Subnet)
+				gw := net.ParseIP(strings.Split(p.Address, "/")[0]).To4()
+				if gw == nil {
+					return fmt.Errorf("gateway must be ipv4")
+				}
+				next, err := findFreeIpv4(ipnet, gw, p.Allocations)
+				if err != nil {
+					return err
+				}
+				ipStr := next.String()
+				p.Allocations[ipStr] = Allocation{
+					ContainerId: containerId,
+					AssignedAt:  time.Now(),
+				}
+				allocated = ipStr
+				return nil
+			}
 		}
-
-		_, ipnet, _ := net.ParseCIDR(st.Subnet)
-		gw := net.ParseIP(st.Gateway).To4()
-		if gw == nil {
-			return fmt.Errorf("gateway must be ipv4")
-		}
-
-		next, err := findFreeIpv4(ipnet, gw, st.Allocations, st.LastAllocated)
-		if err != nil {
-			return err
-		}
-
-		ipStr := next.String()
-		st.Allocations[ipStr] = Allocation{
-			ContainerId: containerId,
-			AssignedAt:  time.Now(),
-		}
-		st.LastAllocated = ipStr
-		allocated = ipStr
-		return nil
+		return fmt.Errorf("target bridge not configured: %s", bridge)
 	})
 	return allocated, err
 }
 
 func (m *IpamManager) Release(containerId string) error {
 	return m.ipamStore.withLock(func(st *IpamState) error {
-		for ip, a := range st.Allocations {
-			if a.ContainerId == containerId {
-				delete(st.Allocations, ip)
-				return nil
+		for _, p := range st.Pools {
+			for ip, a := range p.Allocations {
+				if a.ContainerId == containerId {
+					delete(p.Allocations, ip)
+					return nil
+				}
 			}
 		}
 		return fmt.Errorf("allocation not found for containerId=%s", containerId)
 	})
 }
 
-func findFreeIpv4(ipnet *net.IPNet, gateway net.IP, alloc map[string]Allocation, last string) (net.IP, error) {
+func findFreeIpv4(ipnet *net.IPNet, gateway net.IP, alloc map[string]Allocation) (net.IP, error) {
 	network := ipnet.IP.To4()
 	if network == nil {
 		return nil, fmt.Errorf("ipv4 only supported")
@@ -69,12 +73,6 @@ func findFreeIpv4(ipnet *net.IPNet, gateway net.IP, alloc map[string]Allocation,
 
 	// search stat
 	cursor := start
-	if last != "" {
-		if lip := net.ParseIP(last).To4(); lip != nil && ipnet.Contains(lip) {
-			cursor = incIP(lip)
-		}
-	}
-
 	for i := 0; i < 1<<24; i++ {
 		if !ipnet.Contains(cursor) {
 			cursor = start
