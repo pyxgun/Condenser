@@ -1,4 +1,7 @@
 # Condenser
+<p>
+  <img src="assets/condenser_icon.png" alt="Project Icon" width="190">
+</p>
 Condenser is one of the components of the Raind container runtime stack and serves as the high-level container runtime.  
 It is responsible for container lifecycle management, image management, and providing a REST API for external control.  
 Condenser orchestrates container operations by invoking the low-level runtime Droplet.  
@@ -8,7 +11,8 @@ The Raind container runtime stack is composed of three layers:
 
 - Raind CLI – A user interface for operating the entire runtime stack
 - Condenser – A high-level container runtime responsible for container lifecycle and image management (this repository)
-- Droplet – A low-level container runtime that handles container startup, deletion, and related operations
+- Droplet – A low-level container runtime that handles container startup, deletion, and related operations  
+  (repository: https://github.com/pyxgun/Droplet)
 
 Condenser acts as the control plane of the Raind stack.
 It translates high-level API requests into concrete container operations by generating OCI specifications, managing container state, and delegating execution to Droplet.
