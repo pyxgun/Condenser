@@ -6,6 +6,8 @@ type SpecModel struct {
 	Command   string
 	Namespace []string
 	Hostname  string
+	Env       []string
+	Mount     []string
 
 	HostInterface          string
 	BridgeInterface        string

@@ -1,5 +1,7 @@
 package image
 
 type ImageServiceHandler interface {
-	PullImage(pullParameter ServicePullModel) error
+	Pull(pullParameter ServicePullModel) error
+	Remove(removeParameter ServiceRemoveModel) error
+	GetImageConfig(filepath string) (ImageConfigFile, error)
 }

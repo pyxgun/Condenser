@@ -210,3 +210,78 @@ func (s *IpamStore) GetDefaultInterfaceAddr() (string, error) {
 	})
 	return defaultInterfaceAddr, err
 }
+
+func (s *IpamStore) GetContainerAddress(containerId string) (string, string, string, error) {
+	var (
+		containerAddr   string
+		hostInterface   string
+		bridgeInterface string
+	)
+
+	err := s.withLock(func(st *IpamState) error {
+		hostInterface = st.HostInterface
+		for _, p := range st.Pools {
+			for addr, info := range p.Allocations {
+				if info.ContainerId == containerId {
+					bridgeInterface = p.Interface
+					containerAddr = addr
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("container: %s not found", containerId)
+	})
+	return hostInterface, bridgeInterface, containerAddr, err
+}
+
+func (s *IpamStore) SetForwardInfo(containerId string, sport, dport int, protocol string) error {
+	err := s.withLock(func(st *IpamState) error {
+		for i := range st.Pools {
+			p := st.Pools[i]
+			if p.Allocations == nil {
+				continue
+			}
+
+			for addr, info := range p.Allocations {
+				if info.ContainerId != containerId {
+					continue
+				}
+
+				fi := ForwardInfo{
+					HostPort:      sport,
+					ContainerPort: dport,
+					Protocol:      protocol,
+				}
+
+				alloc := p.Allocations[addr]
+				alloc.Forwards = append(alloc.Forwards, fi)
+				p.Allocations[addr] = alloc
+
+				return nil
+			}
+		}
+		return fmt.Errorf("container: %s not found", containerId)
+	})
+	return err
+}
+
+func (s *IpamStore) GetForwardInfo(containerId string) ([]ForwardInfo, error) {
+	var forwards []ForwardInfo
+	err := s.withLock(func(st *IpamState) error {
+		for _, p := range st.Pools {
+			if p.Allocations == nil {
+				continue
+			}
+			for _, info := range p.Allocations {
+				if info.ContainerId != containerId {
+					continue
+				}
+				for _, f := range info.Forwards {
+					forwards = append(forwards, f)
+				}
+			}
+		}
+		return nil
+	})
+	return forwards, err
+}

@@ -21,6 +21,20 @@ definitions:
       image:
         example: alpine:latest
         type: string
+      mount:
+        example:
+        - '''/host/dir:/container/dir'''
+        - '''/src:/dst'''
+        items:
+          type: string
+        type: array
+      port:
+        example:
+        - '''8080:80'''
+        - '''4443:443'''
+        items:
+          type: string
+        type: array
     type: object
   container.ExecContainerRequest:
     properties:
@@ -70,6 +84,12 @@ definitions:
         type: string
       os:
         example: linux
+        type: string
+    type: object
+  image.RemoveImageRequest:
+    properties:
+      image:
+        example: alpine:latest
         type: string
     type: object
 info:
@@ -189,6 +209,27 @@ paths:
       tags:
       - Hooks
   /v1/images:
+    delete:
+      consumes:
+      - application/json
+      description: remove image from local
+      parameters:
+      - description: Target Image
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/image.RemoveImageRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/image.ApiResponse'
+      summary: remove image
+      tags:
+      - image
     post:
       consumes:
       - application/json

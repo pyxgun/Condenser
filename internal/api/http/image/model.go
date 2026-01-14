@@ -6,6 +6,10 @@ type PullImageRequest struct {
 	Arch  string `json:"arch" example:"arm64"`
 }
 
+type RemoveImageRequest struct {
+	Image string `json:"image" example:"alpine:latest"`
+}
+
 type ApiResponse struct {
 	Status  string `json:"status"` // success | fail
 	Message string `json:"message,omitempty"`

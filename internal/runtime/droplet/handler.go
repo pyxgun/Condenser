@@ -39,6 +39,12 @@ func (h *DropletHandler) Spec(specParameter runtime.SpecModel) error {
 	for _, v := range specParameter.Namespace {
 		args = slices.Concat(args, []string{"--ns", v})
 	}
+	for _, v := range specParameter.Env {
+		args = slices.Concat(args, []string{"--env", v})
+	}
+	for _, v := range specParameter.Mount {
+		args = slices.Concat(args, []string{"--mount", v})
+	}
 	for _, v := range specParameter.ContainerDns {
 		args = slices.Concat(args, []string{"--dns", v})
 	}

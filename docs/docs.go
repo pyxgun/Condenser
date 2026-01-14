@@ -220,6 +220,38 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "delete": {
+                "description": "remove image from local",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "image"
+                ],
+                "summary": "remove image",
+                "parameters": [
+                    {
+                        "description": "Target Image",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/image.RemoveImageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/image.ApiResponse"
+                        }
+                    }
+                }
             }
         }
     },
@@ -254,6 +286,26 @@ const docTemplate = `{
                 "image": {
                     "type": "string",
                     "example": "alpine:latest"
+                },
+                "mount": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "'/host/dir:/container/dir'",
+                        "'/src:/dst'"
+                    ]
+                },
+                "port": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "'8080:80'",
+                        "'4443:443'"
+                    ]
                 }
             }
         },
@@ -326,6 +378,15 @@ const docTemplate = `{
                 "os": {
                     "type": "string",
                     "example": "linux"
+                }
+            }
+        },
+        "image.RemoveImageRequest": {
+            "type": "object",
+            "properties": {
+                "image": {
+                    "type": "string",
+                    "example": "alpine:latest"
                 }
             }
         }

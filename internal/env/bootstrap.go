@@ -3,6 +3,7 @@ package env
 import (
 	"bufio"
 	"condenser/internal/store/csm"
+	"condenser/internal/store/ilm"
 	"condenser/internal/store/ipam"
 	"condenser/internal/utils"
 	"fmt"
@@ -16,6 +17,7 @@ func NewBootstrapManager() *BootstrapManager {
 		commandFactory:    utils.NewCommandFactory(),
 		ipamStoreHandler:  ipam.NewIpamStore(IpamStorePath),
 		csmStoreHandler:   csm.NewCsmStore(CsmStorePath),
+		ilmStoreHandler:   ilm.NewIlmStore(IlmStorePath),
 	}
 }
 
@@ -24,6 +26,7 @@ type BootstrapManager struct {
 	commandFactory    utils.CommandFactory
 	ipamStoreHandler  ipam.IpamStoreHandler
 	csmStoreHandler   csm.CsmStoreHandler
+	ilmStoreHandler   ilm.IlmStoreHandler
 }
 
 func (m *BootstrapManager) SetupRuntime() error {
@@ -49,6 +52,11 @@ func (m *BootstrapManager) SetupRuntime() error {
 
 	// 5. setup CSM (Container State Management)
 	if err := m.setupCsm(); err != nil {
+		return err
+	}
+
+	// 6. setup ILM (Image Layer Management)
+	if err := m.setupIlm(); err != nil {
 		return err
 	}
 
@@ -233,4 +241,8 @@ func (m *BootstrapManager) setupIpam() error {
 
 func (m *BootstrapManager) setupCsm() error {
 	return m.csmStoreHandler.SetContainerState()
+}
+
+func (m *BootstrapManager) setupIlm() error {
+	return m.ilmStoreHandler.SetConfig()
 }

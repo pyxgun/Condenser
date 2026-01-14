@@ -39,7 +39,8 @@ func NewApiRouter() *chi.Mux {
 	r.Delete("/v1/containers/{containerId}/actions/delete", containerHandler.DeleteContainer) // delete container
 
 	// == images ==
-	r.Post("/v1/images", imageHandler.PullImage)
+	r.Post("/v1/images", imageHandler.PullImage)     // pull image
+	r.Delete("/v1/images", imageHandler.RemoveImage) // remove image
 
 	return r
 }

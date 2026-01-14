@@ -40,6 +40,8 @@ func (h *RequestHandler) CreateContainer(w http.ResponseWriter, r *http.Request)
 		container.ServiceCreateModel{
 			Image:   req.Image,
 			Command: req.Command,
+			Port:    req.Port,
+			Mount:   req.Mount,
 		},
 	)
 	if err != nil {

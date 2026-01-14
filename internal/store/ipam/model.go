@@ -4,9 +4,16 @@ import (
 	"time"
 )
 
+type ForwardInfo struct {
+	HostPort      int    `json:"source"`
+	ContainerPort int    `json:"destination"`
+	Protocol      string `json:"protocol"`
+}
+
 type Allocation struct {
-	ContainerId string    `json:"containerId"`
-	AssignedAt  time.Time `json:"assignedAt"`
+	ContainerId string        `json:"containerId"`
+	Forwards    []ForwardInfo `json:"forwards"`
+	AssignedAt  time.Time     `json:"assignedAt"`
 }
 
 type Pool struct {

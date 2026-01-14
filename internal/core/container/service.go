@@ -1,32 +1,45 @@
 package container
 
 import (
+	"condenser/internal/core/image"
+	"condenser/internal/core/network"
 	"condenser/internal/env"
 	"condenser/internal/runtime"
 	"condenser/internal/runtime/droplet"
+	"condenser/internal/store/ilm"
 	"condenser/internal/store/ipam"
 	"condenser/internal/utils"
+	"errors"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
+
+	"al.essio.dev/pkg/shellescape"
 )
 
 func NewContaierService() *ContainerService {
 	return &ContainerService{
-		filesystemHandler: utils.NewFilesystemExecutor(),
-		commandFactory:    utils.NewCommandFactory(),
-		runtimeHandler:    droplet.NewDropletHandler(),
-		ipamStoreHandler:  ipam.NewIpamStore(env.IpamStorePath),
-		ipamHandler:       ipam.NewIpamManager(ipam.NewIpamStore(env.IpamStorePath)),
+		filesystemHandler:     utils.NewFilesystemExecutor(),
+		commandFactory:        utils.NewCommandFactory(),
+		runtimeHandler:        droplet.NewDropletHandler(),
+		ipamStoreHandler:      ipam.NewIpamStore(env.IpamStorePath),
+		ipamHandler:           ipam.NewIpamManager(ipam.NewIpamStore(env.IpamStorePath)),
+		ilmStoreHandler:       ilm.NewIlmStore(env.IlmStorePath),
+		imageServiceHandler:   image.NewImageService(),
+		networkServiceHandler: network.NewNetworkService(),
 	}
 }
 
 type ContainerService struct {
-	filesystemHandler utils.FilesystemHandler
-	commandFactory    utils.CommandFactory
-	runtimeHandler    runtime.RuntimeHandler
-	ipamStoreHandler  ipam.IpamStoreHandler
-	ipamHandler       ipam.IpamHandler
+	filesystemHandler     utils.FilesystemHandler
+	commandFactory        utils.CommandFactory
+	runtimeHandler        runtime.RuntimeHandler
+	ipamStoreHandler      ipam.IpamStoreHandler
+	ipamHandler           ipam.IpamHandler
+	ilmStoreHandler       ilm.IlmStoreHandler
+	imageServiceHandler   image.ImageServiceHandler
+	networkServiceHandler network.NetworkServiceHandler
 }
 
 // == service: create ==
@@ -49,24 +62,17 @@ func (s *ContainerService) Create(createParameter ServiceCreateModel) (string, e
 		return "", fmt.Errorf("setup cgroup subtree failed: %w", err)
 	}
 
-	// parse image string
-	imageParts := strings.SplitN(createParameter.Image, ":", 2)
-	imageRepo := imageParts[0]
-	var imageRef string
-	if len(imageParts) == 2 {
-		imageRef = imageParts[1]
-	} else {
-		imageRef = "latest"
-	}
-	// verify if the layers exist
-	// TODO: if the layers not exist, pull image
-
 	// 5. create spec (config.json)
-	if err := s.createContainerSpec(containerId, imageRepo, imageRef, createParameter.Command); err != nil {
+	if err := s.createContainerSpec(containerId, createParameter); err != nil {
 		return "", fmt.Errorf("create spec failed: %w", err)
 	}
 
-	// 6. create container
+	// 6. setup forward rule
+	if err := s.setupForwardRule(containerId, createParameter.Port); err != nil {
+		return "", fmt.Errorf("forward rule failed: %w", err)
+	}
+
+	// 7. create container
 	if err := s.createContainer(containerId); err != nil {
 		return "", fmt.Errorf("create container failed: %w", err)
 	}
@@ -127,20 +133,38 @@ func (s *ContainerService) setupCgroupSubtree(containerId string) error {
 	return nil
 }
 
-func (s *ContainerService) createContainerSpec(containerId string, imageRepo, imageRef string, command []string) error {
+func (s *ContainerService) createContainerSpec(containerId string, createParameter ServiceCreateModel) error {
+	// read image config.json
+	// parse image
+	imageRepo, imageRef, err := s.parseImageRef(createParameter.Image)
+	if err != nil {
+		return err
+	}
+	imageConfigPath, err := s.ilmStoreHandler.GetConfigPath(imageRepo, imageRef)
+	if err != nil {
+		return err
+	}
+	imageConfig, err := s.imageServiceHandler.GetImageConfig(imageConfigPath)
+	if err != nil {
+		return err
+	}
+
 	// spec parametr
 	// rootfs
 	rootfs := filepath.Join(env.ContainerRootDir, containerId, "merged")
 
 	// cwd
-	cwd := "/" // TODO: retrieve from image bundle
+	cwd := imageConfig.Config.WorkingDir
+	if cwd == "" {
+		cwd = "/"
+	}
 
 	// command
 	var cmd string
-	if len(command) != 0 {
-		cmd = strings.Join(command, " ")
+	if len(createParameter.Command) != 0 {
+		cmd = s.buildCommand(createParameter.Command, []string{})
 	} else {
-		cmd = "/bin/sh" // TODO: retrieve from image bundle
+		cmd = s.buildCommand(imageConfig.Config.Entrypoint, imageConfig.Config.Cmd)
 	}
 
 	// namespace
@@ -148,6 +172,12 @@ func (s *ContainerService) createContainerSpec(containerId string, imageRepo, im
 
 	// hostname
 	hostname := containerId
+
+	// env
+	envs := imageConfig.Config.Env
+
+	// mount
+	mount := createParameter.Mount
 
 	// host interface
 	hostInterface, err := s.ipamStoreHandler.GetDefaultInterface()
@@ -173,7 +203,10 @@ func (s *ContainerService) createContainerSpec(containerId string, imageRepo, im
 	// container dns
 	containerDns := []string{"8.8.8.8"}
 
-	imageLayer := []string{filepath.Join(env.LayerRootDir, "library_"+imageRepo, imageRef, "rootfs")}
+	imageLayer, err := s.ilmStoreHandler.GetRootfsPath(imageRepo, imageRef)
+	if err != nil {
+		return err
+	}
 	upperDir := filepath.Join(env.ContainerRootDir, containerId, "diff")
 	workDir := filepath.Join(env.ContainerRootDir, containerId, "work")
 	outputDir := filepath.Join(env.ContainerRootDir, containerId)
@@ -236,13 +269,15 @@ func (s *ContainerService) createContainerSpec(containerId string, imageRepo, im
 		Command:                cmd,
 		Namespace:              namespace,
 		Hostname:               hostname,
+		Env:                    envs,
+		Mount:                  mount,
 		HostInterface:          hostInterface,
 		BridgeInterface:        bridgeInterface,
 		ContainerInterface:     containerInterface,
 		ContainerInterfaceAddr: containerInterfaceAddr,
 		ContainerGateway:       containerGateway,
 		ContainerDns:           containerDns,
-		ImageLayer:             imageLayer,
+		ImageLayer:             []string{imageLayer},
 		UpperDir:               upperDir,
 		WorkDir:                workDir,
 		CreateRuntimeHook:      createRuntimeHook,
@@ -266,6 +301,95 @@ func (s *ContainerService) createContainer(containerId string) error {
 	if err := s.runtimeHandler.Create(runtime.CreateModel{ContainerId: containerId}); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *ContainerService) parseImageRef(imageStr string) (repository, reference string, err error) {
+	// image string pattern
+	// - ubuntu 				-> library/ubuntu:latest
+	// - ubuntu:24.04 			-> library/ubuntu:24.04
+	// - library/ubuntu:24.04 	-> library/ubuntu:24.04
+	// - nginx@sha256:... 		-> library/nginx@sha256:...
+
+	var repo, ref string
+	if strings.Contains(imageStr, "@") {
+		parts := strings.SplitN(imageStr, "@", 2)
+		repo, ref = parts[0], parts[1]
+	} else {
+		parts := strings.SplitN(imageStr, ":", 2)
+		repo = parts[0]
+		if len(parts) == 2 && parts[1] != "" {
+			ref = parts[1]
+		} else {
+			ref = "latest"
+		}
+	}
+
+	if repo == "" {
+		return "", "", errors.New("empty repository")
+	}
+	if !strings.Contains(repo, "/") {
+		repo = "library/" + repo
+	}
+	return repo, ref, nil
+}
+
+func (s *ContainerService) buildCommand(entrypoint, cmd []string) string {
+	var all []string
+	all = append(all, entrypoint...)
+	all = append(all, cmd...)
+
+	var quoted []string
+	for _, a := range all {
+		quoted = append(quoted, shellescape.Quote(a))
+	}
+	return strings.Join(quoted, " ")
+}
+
+func (s *ContainerService) setupForwardRule(containerId string, ports []string) error {
+	if len(ports) == 0 {
+		return nil
+	}
+
+	// create forward rule
+	for _, port := range ports {
+		var (
+			sport    string
+			dport    string
+			protocol string
+		)
+		portParts := strings.Split(port, ":")
+		if len(portParts) == 2 {
+			sport = portParts[0]
+			dport = portParts[1]
+			protocol = "tcp"
+		} else if len(portParts) == 3 {
+			sport = portParts[0]
+			dport = portParts[1]
+			protocol = portParts[2]
+		} else {
+			return fmt.Errorf("port format failed: %s", port)
+		}
+
+		if err := s.networkServiceHandler.CreateForwardingRule(
+			containerId,
+			network.ServiceNetworkModel{
+				HostPort:      sport,
+				ContainerPort: dport,
+				Protocol:      protocol,
+			},
+		); err != nil {
+			return err
+		}
+
+		// update ipam
+		iSport, _ := strconv.Atoi(sport)
+		iDport, _ := strconv.Atoi(dport)
+		if err := s.ipamStoreHandler.SetForwardInfo(containerId, iSport, iDport, protocol); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -303,6 +427,11 @@ func (s *ContainerService) Delete(deleteParameter ServiceDeleteModel) (string, e
 		return "", fmt.Errorf("delete container failed: %w", err)
 	}
 
+	// 2. cleanup forward rule
+	if err := s.cleanupForwardRules(deleteParameter.ContainerId); err != nil {
+		return "", fmt.Errorf("cleanup forward rule failed: %w", err)
+	}
+
 	// 2. release address
 	if err := s.releaseAddress(deleteParameter.ContainerId); err != nil {
 		return "", fmt.Errorf("release address failed: %w", err)
@@ -330,6 +459,33 @@ func (s *ContainerService) deleteContainer(containerId string) error {
 	); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *ContainerService) cleanupForwardRules(containerId string) error {
+	// retrieve network info
+	forwards, err := s.ipamStoreHandler.GetForwardInfo(containerId)
+	if err != nil {
+		return err
+	}
+	if len(forwards) == 0 {
+		return nil
+	}
+
+	// remove rules
+	for _, f := range forwards {
+		if err := s.networkServiceHandler.RemoveForwardingRule(
+			containerId,
+			network.ServiceNetworkModel{
+				HostPort:      strconv.Itoa(f.HostPort),
+				ContainerPort: strconv.Itoa(f.ContainerPort),
+				Protocol:      f.Protocol,
+			},
+		); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

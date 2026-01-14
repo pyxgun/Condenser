@@ -33,18 +33,49 @@ func (h *RequestHandler) PullImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// service
-	if err := h.serviceHandler.PullImage(
+	if err := h.serviceHandler.Pull(
 		image.ServicePullModel{
 			Image: req.Image,
 			Os:    req.Os,
 			Arch:  req.Arch,
 		},
 	); err != nil {
-		h.responsdFail(w, http.StatusInternalServerError, "failed to pull image: "+err.Error(), nil)
+		h.responsdFail(w, http.StatusInternalServerError, "pull failed: "+err.Error(), nil)
+		return
 	}
 
 	// encode response
-	h.responsdSuccess(w, http.StatusOK, "pull completed", nil)
+	h.responsdSuccess(w, http.StatusOK, "pull completed", req)
+}
+
+// RemoveImage godoc
+// @Summary remove image
+// @Description remove image from local
+// @Tags image
+// @Accept json
+// @Produce json
+// @Param request body RemoveImageRequest true "Target Image"
+// @Success 201 {object} ApiResponse
+// @Router /v1/images [delete]
+func (h *RequestHandler) RemoveImage(w http.ResponseWriter, r *http.Request) {
+	// decode request
+	var req RemoveImageRequest
+	if err := h.decodeRequestBody(r, &req); err != nil {
+		h.responsdFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), nil)
+	}
+
+	// service
+	if err := h.serviceHandler.Remove(
+		image.ServiceRemoveModel{
+			Image: req.Image,
+		},
+	); err != nil {
+		h.responsdFail(w, http.StatusInternalServerError, "remove failed: "+err.Error(), nil)
+		return
+	}
+
+	// encode response
+	h.responsdSuccess(w, http.StatusOK, "remove completed", req)
 }
 
 func (h *RequestHandler) decodeRequestBody(r *http.Request, v any) error {

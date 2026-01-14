@@ -4,6 +4,8 @@ package container
 type CreateContainerRequest struct {
 	Image   string   `json:"image" example:"alpine:latest"`
 	Command []string `json:"command,omitempty" example:"'/bin/sh','-c','echo hello; sleep 60'"`
+	Port    []string `json:"port" example:"'8080:80','4443:443'"`
+	Mount   []string `json:"mount" example:"'/host/dir:/container/dir','/src:/dst'"`
 }
 
 type CreateContainerResponse struct {
