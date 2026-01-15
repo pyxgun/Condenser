@@ -16,6 +16,7 @@ type FilesystemHandler interface {
 	Rename(oldpath string, newpath string) error
 	IsNotExist(err error) bool
 	Flock(fd int, how int) error
+	Chmod(name string, mode os.FileMode) error
 }
 
 func NewFilesystemExecutor() *FilesystemExecutor {
@@ -62,4 +63,8 @@ func (s *FilesystemExecutor) IsNotExist(err error) bool {
 
 func (s *FilesystemExecutor) Flock(fd int, how int) error {
 	return syscall.Flock(fd, how)
+}
+
+func (s *FilesystemExecutor) Chmod(name string, mode os.FileMode) error {
+	return os.Chmod(name, mode)
 }

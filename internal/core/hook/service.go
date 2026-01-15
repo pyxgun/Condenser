@@ -1,6 +1,7 @@
 package hook
 
 import (
+	"condenser/internal/core/container"
 	"condenser/internal/env"
 	"condenser/internal/store/csm"
 	"fmt"
@@ -8,12 +9,14 @@ import (
 
 func NewHookService() *HookService {
 	return &HookService{
-		csmHandler: csm.NewCsmManager(csm.NewCsmStore(env.CsmStorePath)),
+		csmHandler:    csm.NewCsmManager(csm.NewCsmStore(env.CsmStorePath)),
+		cgroupHandler: container.NewContaierService(),
 	}
 }
 
 type HookService struct {
-	csmHandler csm.CsmHandler
+	csmHandler    csm.CsmHandler
+	cgroupHandler container.CgroupServiceHandler
 }
 
 func (s *HookService) UpdateCsm(stateParameter ServiceStateModel, eventType string) error {
@@ -26,6 +29,10 @@ func (s *HookService) UpdateCsm(stateParameter ServiceStateModel, eventType stri
 	case "createContainer":
 		if err := s.csmHandler.UpdateContainer(stateParameter.Id, stateParameter.Status, stateParameter.Pid); err != nil {
 			return fmt.Errorf("csm update failed: %w", err)
+		}
+		// change cgroup dir mode: 755 -> 555
+		if err := s.cgroupHandler.ChangeCgroupMode(stateParameter.Id); err != nil {
+			return fmt.Errorf("chmod cgroup path failed: %w", err)
 		}
 	case "poststart":
 		if err := s.csmHandler.UpdateContainer(stateParameter.Id, stateParameter.Status, stateParameter.Pid); err != nil {

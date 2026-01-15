@@ -275,6 +275,15 @@ func (s *ContainerService) setupCgroupSubtree(containerId string) error {
 	return nil
 }
 
+func (s *ContainerService) ChangeCgroupMode(containerId string) error {
+	cgroupPath := filepath.Join(env.CgroupRuntimeDir, containerId)
+
+	if err := s.filesystemHandler.Chmod(cgroupPath, 0o555); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *ContainerService) allocateAddress(containerId string, bridgeInterface string) (string, string, error) {
 	containerInterfaceAddr, err := s.ipamHandler.Allocate(containerId, bridgeInterface)
 	if err != nil {

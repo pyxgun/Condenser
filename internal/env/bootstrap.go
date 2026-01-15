@@ -174,6 +174,11 @@ func (m *BootstrapManager) setupNetwork() error {
 		return err
 	}
 
+	// 3. setup protect rule
+	if err := m.createManagementProtectRule(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -233,6 +238,30 @@ func (m *BootstrapManager) createMasqueradeRule() error {
 	add := m.commandFactory.Command("iptables", "-t", "nat", "-A", "POSTROUTING", "-s", runtimeSubnet, "-o", hostInterface, "-j", "MASQUERADE")
 	if err := add.Run(); err != nil {
 		return fmt.Errorf("iptables add: %w", err)
+	}
+	return nil
+}
+
+func (m *BootstrapManager) createManagementProtectRule() error {
+	runtimeSubnet, err := m.ipamHandler.GetRuntimeSubnet()
+	if err != nil {
+		return err
+	}
+	hostAddr, err := m.ipamHandler.GetDefaultInterfaceAddr()
+	if err != nil {
+		return err
+	}
+	hostAddr = strings.Split(hostAddr, "/")[0]
+
+	// allow rule for hook traffic: container -> host:7756
+	allowHook := m.commandFactory.Command("iptables", "-I", "INPUT", "1", "-s", runtimeSubnet, "-p", "tcp", "-d", hostAddr, "--dport", "7756", "-j", "ACCEPT")
+	if err := allowHook.Run(); err != nil {
+		return err
+	}
+	// drop rule for management traffic: container -> host:7755
+	dropMgmt := m.commandFactory.Command("iptables", "-I", "INPUT", "2", "-s", runtimeSubnet, "-p", "tcp", "-d", hostAddr, "--dport", "7755", "-j", "DROP")
+	if err := dropMgmt.Run(); err != nil {
+		return err
 	}
 	return nil
 }
