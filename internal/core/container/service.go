@@ -529,12 +529,46 @@ func (s *ContainerService) setupForwardRule(containerId string, ports []string) 
 
 // ===========
 
+func (s *ContainerService) getContainerState(containerId string) (string, error) {
+	containerInfo, err := s.csmHandler.GetContainerById(containerId)
+	if err != nil {
+		return "", err
+	}
+	return containerInfo.State, nil
+}
+
 // == service: start ==
 func (s *ContainerService) Start(startParameter ServiceStartModel) (string, error) {
-	// start container
-	if err := s.startContainer(startParameter.ContainerId, startParameter.Interactive); err != nil {
-		return "", fmt.Errorf("start container failed: %w", err)
+	containerState, err := s.getContainerState(startParameter.ContainerId)
+	if err != nil {
+		return "", err
 	}
+
+	switch containerState {
+	case "created":
+		// start container
+		if err := s.startContainer(startParameter.ContainerId, startParameter.Interactive); err != nil {
+			return "", fmt.Errorf("start container failed: %w", err)
+		}
+
+	case "running":
+		// already started. ignore operation
+		return "", fmt.Errorf("container: %s already started", startParameter.ContainerId)
+
+	case "stopped":
+		// create container
+		if err := s.createContainer(startParameter.ContainerId); err != nil {
+			return "", fmt.Errorf("start container failed: %w", err)
+		}
+		// start container
+		if err := s.startContainer(startParameter.ContainerId, startParameter.Interactive); err != nil {
+			return "", fmt.Errorf("start container failed: %w", err)
+		}
+
+	default:
+		return "", fmt.Errorf("start operation not allowed to current container status: %s", containerState)
+	}
+
 	return startParameter.ContainerId, nil
 }
 
@@ -556,29 +590,39 @@ func (s *ContainerService) startContainer(containerId string, interactive bool) 
 
 // == service: delete ==
 func (s *ContainerService) Delete(deleteParameter ServiceDeleteModel) (string, error) {
-	// 1. delete container
-	if err := s.deleteContainer(deleteParameter.ContainerId); err != nil {
-		return "", fmt.Errorf("delete container failed: %w", err)
+	containerState, err := s.getContainerState(deleteParameter.ContainerId)
+	if err != nil {
+		return "", err
 	}
 
-	// 2. cleanup forward rule
-	if err := s.cleanupForwardRules(deleteParameter.ContainerId); err != nil {
-		return "", fmt.Errorf("cleanup forward rule failed: %w", err)
-	}
+	switch containerState {
+	case "creating", "created", "stopped":
+		// 1. delete container
+		if err := s.deleteContainer(deleteParameter.ContainerId); err != nil {
+			return "", fmt.Errorf("delete container failed: %w", err)
+		}
 
-	// 2. release address
-	if err := s.releaseAddress(deleteParameter.ContainerId); err != nil {
-		return "", fmt.Errorf("release address failed: %w", err)
-	}
+		// 2. cleanup forward rule
+		if err := s.cleanupForwardRules(deleteParameter.ContainerId); err != nil {
+			return "", fmt.Errorf("cleanup forward rule failed: %w", err)
+		}
 
-	// 3. delete container directory
-	if err := s.deleteContainerDirectory(deleteParameter.ContainerId); err != nil {
-		return "", fmt.Errorf("delete container directory failed: %w", err)
-	}
+		// 2. release address
+		if err := s.releaseAddress(deleteParameter.ContainerId); err != nil {
+			return "", fmt.Errorf("release address failed: %w", err)
+		}
 
-	// 4. delete cgroup subtree
-	if err := s.deleteCgroupSubtree(deleteParameter.ContainerId); err != nil {
-		return "", fmt.Errorf("delete cgroup subtree failed: %w", err)
+		// 3. delete container directory
+		if err := s.deleteContainerDirectory(deleteParameter.ContainerId); err != nil {
+			return "", fmt.Errorf("delete container directory failed: %w", err)
+		}
+
+		// 4. delete cgroup subtree
+		if err := s.deleteCgroupSubtree(deleteParameter.ContainerId); err != nil {
+			return "", fmt.Errorf("delete cgroup subtree failed: %w", err)
+		}
+	default:
+		return "", fmt.Errorf("delete operation not allowed to current container status: %s", containerState)
 	}
 
 	return deleteParameter.ContainerId, nil
@@ -650,9 +694,19 @@ func (s *ContainerService) deleteCgroupSubtree(containerId string) error {
 
 // == service: stop ==
 func (s *ContainerService) Stop(stopParameter ServiceStopModel) (string, error) {
-	// stop container
-	if err := s.stopContainer(stopParameter.ContainerId); err != nil {
-		return "", fmt.Errorf("stop failed: %w", err)
+	containerState, err := s.getContainerState(stopParameter.ContainerId)
+	if err != nil {
+		return "", err
+	}
+
+	switch containerState {
+	case "running":
+		// stop container
+		if err := s.stopContainer(stopParameter.ContainerId); err != nil {
+			return "", fmt.Errorf("stop failed: %w", err)
+		}
+	default:
+		return "", fmt.Errorf("stop operation not allowed to current container status: %s", containerState)
 	}
 	return stopParameter.ContainerId, nil
 }

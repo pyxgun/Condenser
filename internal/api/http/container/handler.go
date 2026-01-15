@@ -114,7 +114,7 @@ func (h *RequestHandler) StopContainer(w http.ResponseWriter, r *http.Request) {
 		},
 	)
 	if err != nil {
-		apimodel.RespondFail(w, http.StatusInternalServerError, "service failed: "+err.Error(), StopContainerResponse{Id: ""})
+		apimodel.RespondFail(w, http.StatusInternalServerError, "service failed: "+err.Error(), StopContainerResponse{Id: containerId})
 		return
 	}
 

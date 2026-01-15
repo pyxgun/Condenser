@@ -3,6 +3,7 @@ package main
 import (
 	httpapi "condenser/internal/api/http"
 	"condenser/internal/env"
+	"condenser/internal/monitor"
 	"log"
 	"net/http"
 )
@@ -29,6 +30,13 @@ func main() {
 		if err := http.ListenAndServe(hookAddr, hookRouter); err != nil {
 			log.Fatal(err)
 		}
+	}()
+
+	// monitoring
+	containerMonitoring := monitor.NewContainerMonitor()
+	go func() {
+		log.Println("[*] Container Monitoring Start")
+		containerMonitoring.Start()
 	}()
 
 	log.Printf("[*] api server listening on %s", publicAddr)
