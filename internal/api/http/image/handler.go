@@ -2,8 +2,9 @@ package image
 
 import (
 	"condenser/internal/core/image"
-	"encoding/json"
 	"net/http"
+
+	apimodel "condenser/internal/api/http/utils"
 )
 
 func NewRequestHandler() *RequestHandler {
@@ -23,13 +24,13 @@ type RequestHandler struct {
 // @Accept json
 // @Produce json
 // @Param request body PullImageRequest true "Target Image"
-// @Success 201 {object} ApiResponse
+// @Success 201 {object} apimodel.ApiResponse
 // @Router /v1/images [post]
 func (h *RequestHandler) PullImage(w http.ResponseWriter, r *http.Request) {
 	// decode request
 	var req PullImageRequest
-	if err := h.decodeRequestBody(r, &req); err != nil {
-		h.responsdFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), nil)
+	if err := apimodel.DecodeRequestBody(r, &req); err != nil {
+		apimodel.RespondFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), nil)
 	}
 
 	// service
@@ -40,12 +41,12 @@ func (h *RequestHandler) PullImage(w http.ResponseWriter, r *http.Request) {
 			Arch:  req.Arch,
 		},
 	); err != nil {
-		h.responsdFail(w, http.StatusInternalServerError, "pull failed: "+err.Error(), nil)
+		apimodel.RespondFail(w, http.StatusInternalServerError, "pull failed: "+err.Error(), nil)
 		return
 	}
 
 	// encode response
-	h.responsdSuccess(w, http.StatusOK, "pull completed", req)
+	apimodel.RespondSuccess(w, http.StatusOK, "pull completed", req)
 }
 
 // RemoveImage godoc
@@ -55,13 +56,13 @@ func (h *RequestHandler) PullImage(w http.ResponseWriter, r *http.Request) {
 // @Accept json
 // @Produce json
 // @Param request body RemoveImageRequest true "Target Image"
-// @Success 201 {object} ApiResponse
+// @Success 200 {object} apimodel.ApiResponse
 // @Router /v1/images [delete]
 func (h *RequestHandler) RemoveImage(w http.ResponseWriter, r *http.Request) {
 	// decode request
 	var req RemoveImageRequest
-	if err := h.decodeRequestBody(r, &req); err != nil {
-		h.responsdFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), nil)
+	if err := apimodel.DecodeRequestBody(r, &req); err != nil {
+		apimodel.RespondFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), nil)
 	}
 
 	// service
@@ -70,41 +71,28 @@ func (h *RequestHandler) RemoveImage(w http.ResponseWriter, r *http.Request) {
 			Image: req.Image,
 		},
 	); err != nil {
-		h.responsdFail(w, http.StatusInternalServerError, "remove failed: "+err.Error(), nil)
+		apimodel.RespondFail(w, http.StatusInternalServerError, "remove failed: "+err.Error(), nil)
 		return
 	}
 
 	// encode response
-	h.responsdSuccess(w, http.StatusOK, "remove completed", req)
+	apimodel.RespondSuccess(w, http.StatusOK, "remove completed", req)
 }
 
-func (h *RequestHandler) decodeRequestBody(r *http.Request, v any) error {
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		return err
+// GetImageList godoc
+// @Summary get image list
+// @Description get image list in local storage
+// @Tags image
+// @Success 200 {object} apimodel.ApiResponse
+// @Router /v1/images [get]
+func (h *RequestHandler) GetImageList(w http.ResponseWriter, r *http.Request) {
+	// service
+	imageList, err := h.serviceHandler.GetImageList()
+	if err != nil {
+		apimodel.RespondFail(w, http.StatusInternalServerError, err.Error(), nil)
+		return
 	}
-	return nil
-}
 
-func (h *RequestHandler) writeJson(w http.ResponseWriter, statusCode int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func (h *RequestHandler) responsdSuccess(w http.ResponseWriter, statusCode int, message string, data any) {
-	h.writeJson(w, statusCode, ApiResponse{
-		Status:  "success",
-		Message: message,
-		Data:    data,
-	})
-}
-
-func (h *RequestHandler) responsdFail(w http.ResponseWriter, statusCode int, message string, data any) {
-	h.writeJson(w, statusCode, ApiResponse{
-		Status:  "fail",
-		Message: message,
-		Data:    data,
-	})
+	// encode response
+	apimodel.RespondSuccess(w, http.StatusOK, "retrieve image list success", imageList)
 }

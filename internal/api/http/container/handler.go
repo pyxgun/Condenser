@@ -2,10 +2,11 @@ package container
 
 import (
 	"condenser/internal/core/container"
-	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
+	apimodel "condenser/internal/api/http/utils"
 )
 
 func NewRequestHandler() *RequestHandler {
@@ -25,13 +26,13 @@ type RequestHandler struct {
 // @Accept json
 // @Produce json
 // @Param request body CreateContainerRequest true "Container Spec"
-// @Success 201 {object} ApiResponse
+// @Success 201 {object} apimodel.ApiResponse
 // @Router /v1/containers [post]
 func (h *RequestHandler) CreateContainer(w http.ResponseWriter, r *http.Request) {
 	// decode request
 	var req CreateContainerRequest
-	if err := h.decodeRequestBody(r, &req); err != nil {
-		h.responsdFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), CreateContainerResponse{Id: ""})
+	if err := apimodel.DecodeRequestBody(r, &req); err != nil {
+		apimodel.RespondFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), CreateContainerResponse{Id: ""})
 		return
 	}
 
@@ -42,15 +43,16 @@ func (h *RequestHandler) CreateContainer(w http.ResponseWriter, r *http.Request)
 			Command: req.Command,
 			Port:    req.Port,
 			Mount:   req.Mount,
+			Network: req.Network,
 		},
 	)
 	if err != nil {
-		h.responsdFail(w, http.StatusInternalServerError, "service failed: "+err.Error(), CreateContainerResponse{Id: ""})
+		apimodel.RespondFail(w, http.StatusInternalServerError, "service failed: "+err.Error(), CreateContainerResponse{Id: ""})
 		return
 	}
 
 	// encode response
-	h.responsdSuccess(w, http.StatusOK, "cotainer created", CreateContainerResponse{Id: result})
+	apimodel.RespondSuccess(w, http.StatusOK, "cotainer created", CreateContainerResponse{Id: result})
 }
 
 // StartContainer godoc
@@ -59,19 +61,19 @@ func (h *RequestHandler) CreateContainer(w http.ResponseWriter, r *http.Request)
 // @Tags containers
 // @Param containerId path string true "Container ID"
 // @Param request body StartContainerRequest true "Start Options"
-// @Success 201 {object} ApiResponse
+// @Success 201 {object} apimodel.ApiResponse
 // @Router /v1/containers/{containerId}/actions/start [post]
 func (h *RequestHandler) StartContainer(w http.ResponseWriter, r *http.Request) {
 	containerId := chi.URLParam(r, "containerId")
 	if containerId == "" {
-		h.responsdFail(w, http.StatusBadRequest, "missing container Id", StartContainerResponse{Id: ""})
+		apimodel.RespondFail(w, http.StatusBadRequest, "missing container Id", StartContainerResponse{Id: ""})
 		return
 	}
 
 	// decode request
 	var req StartContainerRequest
-	if err := h.decodeRequestBody(r, &req); err != nil {
-		h.responsdFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), StartContainerResponse{Id: containerId})
+	if err := apimodel.DecodeRequestBody(r, &req); err != nil {
+		apimodel.RespondFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), StartContainerResponse{Id: containerId})
 		return
 	}
 
@@ -83,12 +85,12 @@ func (h *RequestHandler) StartContainer(w http.ResponseWriter, r *http.Request) 
 		},
 	)
 	if err != nil {
-		h.responsdFail(w, http.StatusInternalServerError, "service failed: "+err.Error(), StartContainerResponse{Id: containerId})
+		apimodel.RespondFail(w, http.StatusInternalServerError, "service failed: "+err.Error(), StartContainerResponse{Id: containerId})
 		return
 	}
 
 	// encode response
-	h.responsdSuccess(w, http.StatusOK, "container started", StartContainerResponse{Id: result})
+	apimodel.RespondSuccess(w, http.StatusOK, "container started", StartContainerResponse{Id: result})
 }
 
 // StopContainer godoc
@@ -96,12 +98,12 @@ func (h *RequestHandler) StartContainer(w http.ResponseWriter, r *http.Request) 
 // @Description stop an exitsting container
 // @Tags containers
 // @Param containerId path string true "Container ID"
-// @Success 201 {object} ApiResponse
+// @Success 201 {object} apimodel.ApiResponse
 // @Router /v1/containers/{containerId}/actions/stop [post]
 func (h *RequestHandler) StopContainer(w http.ResponseWriter, r *http.Request) {
 	containerId := chi.URLParam(r, "containerId")
 	if containerId == "" {
-		h.responsdFail(w, http.StatusBadRequest, "missing containerId", StopContainerResponse{Id: ""})
+		apimodel.RespondFail(w, http.StatusBadRequest, "missing containerId", StopContainerResponse{Id: ""})
 		return
 	}
 
@@ -112,12 +114,12 @@ func (h *RequestHandler) StopContainer(w http.ResponseWriter, r *http.Request) {
 		},
 	)
 	if err != nil {
-		h.responsdFail(w, http.StatusInternalServerError, "service failed: "+err.Error(), StopContainerResponse{Id: ""})
+		apimodel.RespondFail(w, http.StatusInternalServerError, "service failed: "+err.Error(), StopContainerResponse{Id: containerId})
 		return
 	}
 
 	// encode response
-	h.responsdSuccess(w, http.StatusOK, "container stopped", StopContainerResponse{Id: result})
+	apimodel.RespondSuccess(w, http.StatusOK, "container stopped", StopContainerResponse{Id: result})
 }
 
 // ExecContainer godoc
@@ -126,24 +128,24 @@ func (h *RequestHandler) StopContainer(w http.ResponseWriter, r *http.Request) {
 // @Tags containers
 // @Param containerId path string true "Container ID"
 // @Param request body ExecContainerRequest true "Execute Options"
-// @Success 201 {object} ApiResponse
+// @Success 201 {object} apimodel.ApiResponse
 // @Router /v1/containers/{containerId}/actions/exec [post]
 func (h *RequestHandler) ExecContainer(w http.ResponseWriter, r *http.Request) {
 	containerId := chi.URLParam(r, "containerId")
 	if containerId == "" {
-		h.responsdFail(w, http.StatusBadRequest, "missing containerId", ExecContainerResponse{Id: ""})
+		apimodel.RespondFail(w, http.StatusBadRequest, "missing containerId", ExecContainerResponse{Id: ""})
 		return
 	}
 
 	// decode request
 	var req ExecContainerRequest
-	if err := h.decodeRequestBody(r, &req); err != nil {
-		h.responsdFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), ExecContainerResponse{Id: containerId})
+	if err := apimodel.DecodeRequestBody(r, &req); err != nil {
+		apimodel.RespondFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), ExecContainerResponse{Id: containerId})
 		return
 	}
 
 	// encode response
-	h.responsdSuccess(w, http.StatusOK, "container executed", ExecContainerResponse{Id: containerId})
+	apimodel.RespondSuccess(w, http.StatusOK, "container executed", ExecContainerResponse{Id: containerId})
 }
 
 // DeleteContainer godoc
@@ -151,12 +153,12 @@ func (h *RequestHandler) ExecContainer(w http.ResponseWriter, r *http.Request) {
 // @Description delete an exitsting container
 // @Tags containers
 // @Param containerId path string true "Container ID"
-// @Success 200 {object} ApiResponse
+// @Success 200 {object} apimodel.ApiResponse
 // @Router /v1/containers/{containerId}/actions/delete [delete]
 func (h *RequestHandler) DeleteContainer(w http.ResponseWriter, r *http.Request) {
 	containerId := chi.URLParam(r, "containerId")
 	if containerId == "" {
-		h.responsdFail(w, http.StatusBadRequest, "missing containerId", DeleteContainerResponse{Id: ""})
+		apimodel.RespondFail(w, http.StatusBadRequest, "missing containerId", DeleteContainerResponse{Id: ""})
 		return
 	}
 
@@ -167,41 +169,53 @@ func (h *RequestHandler) DeleteContainer(w http.ResponseWriter, r *http.Request)
 		},
 	)
 	if err != nil {
-		h.responsdFail(w, http.StatusInternalServerError, "service failed: "+err.Error(), DeleteContainerResponse{Id: containerId})
+		apimodel.RespondFail(w, http.StatusInternalServerError, "service failed: "+err.Error(), DeleteContainerResponse{Id: containerId})
 		return
 	}
 
 	// encode response
-	h.responsdSuccess(w, http.StatusOK, "container deleted", DeleteContainerResponse{Id: result})
+	apimodel.RespondSuccess(w, http.StatusOK, "container deleted", DeleteContainerResponse{Id: result})
 }
 
-func (h *RequestHandler) decodeRequestBody(r *http.Request, v any) error {
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		return err
+// GetContainerList godoc
+// @Summary get container list
+// @Description get all container list
+// @Tags containers
+// @Success 200 {object} apimodel.ApiResponse
+// @Router /v1/containers [get]
+func (h *RequestHandler) GetContainerList(w http.ResponseWriter, r *http.Request) {
+	// service: get container list
+	containerList, err := h.serviceHandler.GetContainerList()
+	if err != nil {
+		apimodel.RespondFail(w, http.StatusInternalServerError, "retrieve container list failed: "+err.Error(), nil)
+		return
 	}
-	return nil
+
+	// encode response
+	apimodel.RespondSuccess(w, http.StatusOK, "retrieve container list success", containerList)
 }
 
-func (h *RequestHandler) writeJson(w http.ResponseWriter, statusCode int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	_ = json.NewEncoder(w).Encode(v)
-}
+// GetContainerById godoc
+// @Summary get container info
+// @Description get an exitsting container info
+// @Tags containers
+// @Param containerId path string true "Container ID"
+// @Success 200 {object} apimodel.ApiResponse
+// @Router /v1/containers/{containerId} [get]
+func (h *RequestHandler) GetContainerById(w http.ResponseWriter, r *http.Request) {
+	containerId := chi.URLParam(r, "containerId")
+	if containerId == "" {
+		apimodel.RespondFail(w, http.StatusBadRequest, "missing container Id", StartContainerResponse{Id: ""})
+		return
+	}
 
-func (h *RequestHandler) responsdSuccess(w http.ResponseWriter, statusCode int, message string, data any) {
-	h.writeJson(w, statusCode, ApiResponse{
-		Status:  "success",
-		Message: message,
-		Data:    data,
-	})
-}
+	// service: get container by id
+	containerInfo, err := h.serviceHandler.GetContainerById(containerId)
+	if err != nil {
+		apimodel.RespondFail(w, http.StatusInternalServerError, err.Error(), nil)
+		return
+	}
 
-func (h *RequestHandler) responsdFail(w http.ResponseWriter, statusCode int, message string, data any) {
-	h.writeJson(w, statusCode, ApiResponse{
-		Status:  "fail",
-		Message: message,
-		Data:    data,
-	})
+	// encode response
+	apimodel.RespondSuccess(w, http.StatusOK, "retrieve container info success", containerInfo)
 }

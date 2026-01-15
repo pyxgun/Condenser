@@ -16,6 +16,7 @@ func NewBootstrapManager() *BootstrapManager {
 		filesystemHandler: utils.NewFilesystemExecutor(),
 		commandFactory:    utils.NewCommandFactory(),
 		ipamStoreHandler:  ipam.NewIpamStore(IpamStorePath),
+		ipamHandler:       ipam.NewIpamManager(ipam.NewIpamStore(IpamStorePath)),
 		csmStoreHandler:   csm.NewCsmStore(CsmStorePath),
 		ilmStoreHandler:   ilm.NewIlmStore(IlmStorePath),
 	}
@@ -25,6 +26,7 @@ type BootstrapManager struct {
 	filesystemHandler utils.FilesystemHandler
 	commandFactory    utils.CommandFactory
 	ipamStoreHandler  ipam.IpamStoreHandler
+	ipamHandler       ipam.IpamHandler
 	csmStoreHandler   csm.CsmStoreHandler
 	ilmStoreHandler   ilm.IlmStoreHandler
 }
@@ -176,7 +178,7 @@ func (m *BootstrapManager) setupNetwork() error {
 }
 
 func (m *BootstrapManager) createBridgeInterface() error {
-	networkList, err := m.ipamStoreHandler.GetNetworkList()
+	networkList, err := m.ipamHandler.GetNetworkList()
 	if err != nil {
 		return err
 	}
@@ -211,11 +213,11 @@ func (m *BootstrapManager) createBridgeInterface() error {
 }
 
 func (m *BootstrapManager) createMasqueradeRule() error {
-	hostInterface, err := m.ipamStoreHandler.GetDefaultInterface()
+	hostInterface, err := m.ipamHandler.GetDefaultInterface()
 	if err != nil {
 		return err
 	}
-	runtimeSubnet, err := m.ipamStoreHandler.GetRuntimeSubnet()
+	runtimeSubnet, err := m.ipamHandler.GetRuntimeSubnet()
 	if err != nil {
 		return err
 	}

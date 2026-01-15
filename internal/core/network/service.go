@@ -8,14 +8,14 @@ import (
 
 func NewNetworkService() *NetworkService {
 	return &NetworkService{
-		commandFactory:   utils.NewCommandFactory(),
-		ipamStoreHandler: ipam.NewIpamStore(env.IpamStorePath),
+		commandFactory: utils.NewCommandFactory(),
+		ipamHandler:    ipam.NewIpamManager(ipam.NewIpamStore(env.IpamStorePath)),
 	}
 }
 
 type NetworkService struct {
-	commandFactory   utils.CommandFactory
-	ipamStoreHandler ipam.IpamStoreHandler
+	commandFactory utils.CommandFactory
+	ipamHandler    ipam.IpamHandler
 }
 
 func (s *NetworkService) CreateForwardingRule(containerId string, parameter ServiceNetworkModel) error {
@@ -49,7 +49,7 @@ func (s *NetworkService) RemoveForwardingRule(containerId string, parameter Serv
 }
 
 func (s *NetworkService) getContainerAddress(containerId string) (string, string, string, error) {
-	host, bridge, addr, err := s.ipamStoreHandler.GetContainerAddress(containerId)
+	host, bridge, addr, err := s.ipamHandler.GetContainerAddress(containerId)
 	if err != nil {
 		return "", "", "", err
 	}

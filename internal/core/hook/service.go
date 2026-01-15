@@ -20,27 +20,22 @@ func (s *HookService) UpdateCsm(stateParameter ServiceStateModel, eventType stri
 	// switch eventType
 	switch eventType {
 	case "createRuntime":
-		// create csm
-		if err := s.csmHandler.StoreContainer(stateParameter.Id, stateParameter.Status, stateParameter.Pid); err != nil {
+		if err := s.csmHandler.UpdateContainer(stateParameter.Id, stateParameter.Status, stateParameter.Pid); err != nil {
 			return fmt.Errorf("csm create failed: %w", err)
 		}
 	case "createContainer":
-		// update csm
 		if err := s.csmHandler.UpdateContainer(stateParameter.Id, stateParameter.Status, stateParameter.Pid); err != nil {
 			return fmt.Errorf("csm update failed: %w", err)
 		}
 	case "poststart":
-		// update csm
 		if err := s.csmHandler.UpdateContainer(stateParameter.Id, stateParameter.Status, stateParameter.Pid); err != nil {
 			return fmt.Errorf("csm update failed: %w", err)
 		}
 	case "stopContainer":
-		// update csm
 		if err := s.csmHandler.UpdateContainer(stateParameter.Id, stateParameter.Status, stateParameter.Pid); err != nil {
 			return fmt.Errorf("csm update failed: %w", err)
 		}
 	case "poststop":
-		// remove csm
 		if err := s.csmHandler.RemoveContainer(stateParameter.Id); err != nil {
 			return fmt.Errorf("csm remove failed: %w", err)
 		}

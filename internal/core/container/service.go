@@ -6,12 +6,14 @@ import (
 	"condenser/internal/env"
 	"condenser/internal/runtime"
 	"condenser/internal/runtime/droplet"
+	"condenser/internal/store/csm"
 	"condenser/internal/store/ilm"
 	"condenser/internal/store/ipam"
 	"condenser/internal/utils"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -20,64 +22,204 @@ import (
 
 func NewContaierService() *ContainerService {
 	return &ContainerService{
-		filesystemHandler:     utils.NewFilesystemExecutor(),
-		commandFactory:        utils.NewCommandFactory(),
-		runtimeHandler:        droplet.NewDropletHandler(),
-		ipamStoreHandler:      ipam.NewIpamStore(env.IpamStorePath),
-		ipamHandler:           ipam.NewIpamManager(ipam.NewIpamStore(env.IpamStorePath)),
-		ilmStoreHandler:       ilm.NewIlmStore(env.IlmStorePath),
+		filesystemHandler: utils.NewFilesystemExecutor(),
+		commandFactory:    utils.NewCommandFactory(),
+		runtimeHandler:    droplet.NewDropletHandler(),
+
+		ipamHandler: ipam.NewIpamManager(ipam.NewIpamStore(env.IpamStorePath)),
+		ilmHandler:  ilm.NewIlmManager(ilm.NewIlmStore(env.IlmStorePath)),
+		csmHandler:  csm.NewCsmManager(csm.NewCsmStore(env.CsmStorePath)),
+
 		imageServiceHandler:   image.NewImageService(),
 		networkServiceHandler: network.NewNetworkService(),
 	}
 }
 
 type ContainerService struct {
-	filesystemHandler     utils.FilesystemHandler
-	commandFactory        utils.CommandFactory
-	runtimeHandler        runtime.RuntimeHandler
-	ipamStoreHandler      ipam.IpamStoreHandler
-	ipamHandler           ipam.IpamHandler
-	ilmStoreHandler       ilm.IlmStoreHandler
+	filesystemHandler utils.FilesystemHandler
+	commandFactory    utils.CommandFactory
+	runtimeHandler    runtime.RuntimeHandler
+
+	ipamHandler ipam.IpamHandler
+	ilmHandler  ilm.IlmHandler
+	csmHandler  csm.CsmHandler
+
 	imageServiceHandler   image.ImageServiceHandler
 	networkServiceHandler network.NetworkServiceHandler
 }
 
 // == service: create ==
 func (s *ContainerService) Create(createParameter ServiceCreateModel) (string, error) {
+	// RollbackFlag for handling rollback handling when process is not completed successfuly
+	var rollbackFlag RollbackFlag
+
 	// 1. generate container id
 	containerId := utils.NewUlid()
 
-	// 2. setup container directory
-	if err := s.setupContainerDirectory(containerId); err != nil {
-		return "", fmt.Errorf("create container directory failed: %w", err)
+	// 2. check if the requested image exist
+	imageRepo, imageRef, err := s.parseImageRef(createParameter.Image)
+	if err != nil {
+		return "", err
 	}
 
-	// 3. setup etc files
+	// 3. if the image not exist in local, pull image
+	if !s.ilmHandler.IsImageExist(imageRepo, imageRef) {
+		if err := s.pullImage(createParameter.Image, createParameter.Os, createParameter.Arch); err != nil {
+			return "", err
+		}
+	}
+
+	// 4. load image config file
+	imageConfigPath, err := s.ilmHandler.GetConfigPath(imageRepo, imageRef)
+	if err != nil {
+		return "", err
+	}
+	imageConfig, err := s.imageServiceHandler.GetImageConfig(imageConfigPath)
+	if err != nil {
+		return "", err
+	}
+
+	// 5. allocate address
+	bridgeInterface := createParameter.Network
+	if bridgeInterface == "" {
+		bridgeInterface = "raind0"
+	}
+	containerGateway, containerAddr, err := s.allocateAddress(containerId, bridgeInterface)
+	if err != nil {
+		return "", err
+	}
+	rollbackFlag.AllocateAddr = true
+
+	// 6. create CSM entry with state=creating, pid=0, creatingAt=nil
+	//    command=if user specified, use it. if not, use image config's command
+	var command []string
+	if len(createParameter.Command) > 0 {
+		command = createParameter.Command
+	} else {
+		command = slices.Concat(imageConfig.Config.Entrypoint, imageConfig.Config.Cmd)
+	}
+	if err := s.csmHandler.StoreContainer(containerId, "creating", 0, imageRepo, imageRef, command); err != nil {
+		return "", err
+	}
+	rollbackFlag.CSMEntry = true
+
+	// 7. setup container directory
+	if err := s.setupContainerDirectory(containerId); err != nil {
+		if err := s.rollback(rollbackFlag, containerId); err != nil {
+			return "", fmt.Errorf("rollback failed: %w", err)
+		}
+		return "", fmt.Errorf("create container directory failed: %w", err)
+	}
+	rollbackFlag.DirectoryEnv = true
+
+	// 8. setup etc files
 	if err := s.setupEtcFiles(containerId); err != nil {
+		if err := s.rollback(rollbackFlag, containerId); err != nil {
+			return "", fmt.Errorf("rollback failed: %w", err)
+		}
 		return "", fmt.Errorf("setup etc files failed: %w", err)
 	}
 
-	// 4. setup cgroup subtree
+	// 9. setup cgroup subtree
 	if err := s.setupCgroupSubtree(containerId); err != nil {
+		if err := s.rollback(rollbackFlag, containerId); err != nil {
+			return "", fmt.Errorf("rollback failed: %w", err)
+		}
 		return "", fmt.Errorf("setup cgroup subtree failed: %w", err)
 	}
+	rollbackFlag.CgroupEntry = true
 
-	// 5. create spec (config.json)
-	if err := s.createContainerSpec(containerId, createParameter); err != nil {
+	// 10. create spec (config.json)
+	if err := s.createContainerSpec(
+		containerId, createParameter, imageRepo, imageRef, imageConfig,
+		bridgeInterface, containerAddr, containerGateway,
+	); err != nil {
+		if err := s.rollback(rollbackFlag, containerId); err != nil {
+			return "", fmt.Errorf("rollback failed: %w", err)
+		}
 		return "", fmt.Errorf("create spec failed: %w", err)
 	}
 
-	// 6. setup forward rule
+	// 11. setup forward rule
 	if err := s.setupForwardRule(containerId, createParameter.Port); err != nil {
+		if err := s.rollback(rollbackFlag, containerId); err != nil {
+			return "", fmt.Errorf("rollback failed: %w", err)
+		}
 		return "", fmt.Errorf("forward rule failed: %w", err)
 	}
+	rollbackFlag.ForwardRule = true
 
-	// 7. create container
+	// 12. create container
 	if err := s.createContainer(containerId); err != nil {
+		if err := s.rollback(rollbackFlag, containerId); err != nil {
+			return "", fmt.Errorf("rollback failed: %w", err)
+		}
 		return "", fmt.Errorf("create container failed: %w", err)
 	}
 
 	return containerId, nil
+}
+
+type RollbackFlag struct {
+	AllocateAddr bool
+	CSMEntry     bool
+	DirectoryEnv bool
+	CgroupEntry  bool
+	ForwardRule  bool
+}
+
+func (s *ContainerService) rollback(rollbackFlag RollbackFlag, containerId string) error {
+	if rollbackFlag.AllocateAddr {
+		if err := s.releaseAddress(containerId); err != nil {
+			return err
+		}
+	}
+	if rollbackFlag.CSMEntry {
+		if err := s.csmHandler.RemoveContainer(containerId); err != nil {
+			return err
+		}
+	}
+	if rollbackFlag.DirectoryEnv {
+		if err := s.deleteContainerDirectory(containerId); err != nil {
+			return err
+		}
+	}
+	if rollbackFlag.CgroupEntry {
+		if err := s.deleteCgroupSubtree(containerId); err != nil {
+			return err
+		}
+	}
+	if rollbackFlag.ForwardRule {
+		if err := s.cleanupForwardRules(containerId); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *ContainerService) pullImage(targetImage string, os string, arch string) error {
+	var (
+		targetOs   string
+		targetArch string
+	)
+	if os == "" {
+		targetOs = utils.HostOs()
+	}
+	if arch == "" {
+		hostArch, err := utils.HostArch()
+		if err != nil {
+			return err
+		}
+		targetArch = hostArch
+	}
+	if err := s.imageServiceHandler.Pull(image.ServicePullModel{
+		Image: targetImage,
+		Os:    targetOs,
+		Arch:  targetArch,
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *ContainerService) setupContainerDirectory(containerId string) error {
@@ -133,21 +275,27 @@ func (s *ContainerService) setupCgroupSubtree(containerId string) error {
 	return nil
 }
 
-func (s *ContainerService) createContainerSpec(containerId string, createParameter ServiceCreateModel) error {
-	// read image config.json
-	// parse image
-	imageRepo, imageRef, err := s.parseImageRef(createParameter.Image)
+func (s *ContainerService) allocateAddress(containerId string, bridgeInterface string) (string, string, error) {
+	containerInterfaceAddr, err := s.ipamHandler.Allocate(containerId, bridgeInterface)
 	if err != nil {
-		return err
+		return "", "", err
 	}
-	imageConfigPath, err := s.ilmStoreHandler.GetConfigPath(imageRepo, imageRef)
+	containerInterfaceAddr = containerInterfaceAddr + "/24"
+	// container gateway
+	containerGateway, err := s.ipamHandler.GetBridgeAddr(bridgeInterface)
 	if err != nil {
-		return err
+		return "", "", err
 	}
-	imageConfig, err := s.imageServiceHandler.GetImageConfig(imageConfigPath)
-	if err != nil {
-		return err
-	}
+	containerGateway = strings.Split(containerGateway, "/")[0]
+
+	return containerGateway, containerInterfaceAddr, nil
+}
+
+func (s *ContainerService) createContainerSpec(
+	containerId string, createParameter ServiceCreateModel,
+	imageRepo, imageRef string, imageConfig image.ImageConfigFile,
+	bridge, containerAddr, containerGateway string,
+) error {
 
 	// spec parametr
 	// rootfs
@@ -180,30 +328,16 @@ func (s *ContainerService) createContainerSpec(containerId string, createParamet
 	mount := createParameter.Mount
 
 	// host interface
-	hostInterface, err := s.ipamStoreHandler.GetDefaultInterface()
+	hostInterface, err := s.ipamHandler.GetDefaultInterface()
 	if err != nil {
 		return err
 	}
-
-	// bridge interface
-	// TODO: network option for specifing subnet
-	bridgeInterface := "raind0"
 
 	// container interface
 	containerInterface := "eth0"
-	// container interface address
-	containerInterfaceAddr, err := s.ipamHandler.Allocate(containerId, bridgeInterface)
-	if err != nil {
-		return err
-	}
-	containerInterfaceAddr = containerInterfaceAddr + "/24"
-	// container gateway
-	// TODO: network option for specifing subnet
-	containerGateway := strings.Split("10.166.0.254/24", "/")[0]
-	// container dns
 	containerDns := []string{"8.8.8.8"}
 
-	imageLayer, err := s.ilmStoreHandler.GetRootfsPath(imageRepo, imageRef)
+	imageLayer, err := s.ilmHandler.GetRootfsPath(imageRepo, imageRef)
 	if err != nil {
 		return err
 	}
@@ -212,7 +346,7 @@ func (s *ContainerService) createContainerSpec(containerId string, createParamet
 	outputDir := filepath.Join(env.ContainerRootDir, containerId)
 
 	// hook
-	hookAddr, err := s.ipamStoreHandler.GetDefaultInterfaceAddr()
+	hookAddr, err := s.ipamHandler.GetDefaultInterfaceAddr()
 	if err != nil {
 		return err
 	}
@@ -272,9 +406,9 @@ func (s *ContainerService) createContainerSpec(containerId string, createParamet
 		Env:                    envs,
 		Mount:                  mount,
 		HostInterface:          hostInterface,
-		BridgeInterface:        bridgeInterface,
+		BridgeInterface:        bridge,
 		ContainerInterface:     containerInterface,
-		ContainerInterfaceAddr: containerInterfaceAddr,
+		ContainerInterfaceAddr: containerAddr,
 		ContainerGateway:       containerGateway,
 		ContainerDns:           containerDns,
 		ImageLayer:             []string{imageLayer},
@@ -385,7 +519,7 @@ func (s *ContainerService) setupForwardRule(containerId string, ports []string) 
 		// update ipam
 		iSport, _ := strconv.Atoi(sport)
 		iDport, _ := strconv.Atoi(dport)
-		if err := s.ipamStoreHandler.SetForwardInfo(containerId, iSport, iDport, protocol); err != nil {
+		if err := s.ipamHandler.SetForwardInfo(containerId, iSport, iDport, protocol); err != nil {
 			return err
 		}
 	}
@@ -395,12 +529,46 @@ func (s *ContainerService) setupForwardRule(containerId string, ports []string) 
 
 // ===========
 
+func (s *ContainerService) getContainerState(containerId string) (string, error) {
+	containerInfo, err := s.csmHandler.GetContainerById(containerId)
+	if err != nil {
+		return "", err
+	}
+	return containerInfo.State, nil
+}
+
 // == service: start ==
 func (s *ContainerService) Start(startParameter ServiceStartModel) (string, error) {
-	// start container
-	if err := s.startContainer(startParameter.ContainerId, startParameter.Interactive); err != nil {
-		return "", fmt.Errorf("start container failed: %w", err)
+	containerState, err := s.getContainerState(startParameter.ContainerId)
+	if err != nil {
+		return "", err
 	}
+
+	switch containerState {
+	case "created":
+		// start container
+		if err := s.startContainer(startParameter.ContainerId, startParameter.Interactive); err != nil {
+			return "", fmt.Errorf("start container failed: %w", err)
+		}
+
+	case "running":
+		// already started. ignore operation
+		return "", fmt.Errorf("container: %s already started", startParameter.ContainerId)
+
+	case "stopped":
+		// create container
+		if err := s.createContainer(startParameter.ContainerId); err != nil {
+			return "", fmt.Errorf("start container failed: %w", err)
+		}
+		// start container
+		if err := s.startContainer(startParameter.ContainerId, startParameter.Interactive); err != nil {
+			return "", fmt.Errorf("start container failed: %w", err)
+		}
+
+	default:
+		return "", fmt.Errorf("start operation not allowed to current container status: %s", containerState)
+	}
+
 	return startParameter.ContainerId, nil
 }
 
@@ -422,29 +590,39 @@ func (s *ContainerService) startContainer(containerId string, interactive bool) 
 
 // == service: delete ==
 func (s *ContainerService) Delete(deleteParameter ServiceDeleteModel) (string, error) {
-	// 1. delete container
-	if err := s.deleteContainer(deleteParameter.ContainerId); err != nil {
-		return "", fmt.Errorf("delete container failed: %w", err)
+	containerState, err := s.getContainerState(deleteParameter.ContainerId)
+	if err != nil {
+		return "", err
 	}
 
-	// 2. cleanup forward rule
-	if err := s.cleanupForwardRules(deleteParameter.ContainerId); err != nil {
-		return "", fmt.Errorf("cleanup forward rule failed: %w", err)
-	}
+	switch containerState {
+	case "creating", "created", "stopped":
+		// 1. delete container
+		if err := s.deleteContainer(deleteParameter.ContainerId); err != nil {
+			return "", fmt.Errorf("delete container failed: %w", err)
+		}
 
-	// 2. release address
-	if err := s.releaseAddress(deleteParameter.ContainerId); err != nil {
-		return "", fmt.Errorf("release address failed: %w", err)
-	}
+		// 2. cleanup forward rule
+		if err := s.cleanupForwardRules(deleteParameter.ContainerId); err != nil {
+			return "", fmt.Errorf("cleanup forward rule failed: %w", err)
+		}
 
-	// 3. delete container directory
-	if err := s.deleteContainerDirectory(deleteParameter.ContainerId); err != nil {
-		return "", fmt.Errorf("delete container directory failed: %w", err)
-	}
+		// 2. release address
+		if err := s.releaseAddress(deleteParameter.ContainerId); err != nil {
+			return "", fmt.Errorf("release address failed: %w", err)
+		}
 
-	// 4. delete cgroup subtree
-	if err := s.deleteCgroupSubtree(deleteParameter.ContainerId); err != nil {
-		return "", fmt.Errorf("delete cgroup subtree failed: %w", err)
+		// 3. delete container directory
+		if err := s.deleteContainerDirectory(deleteParameter.ContainerId); err != nil {
+			return "", fmt.Errorf("delete container directory failed: %w", err)
+		}
+
+		// 4. delete cgroup subtree
+		if err := s.deleteCgroupSubtree(deleteParameter.ContainerId); err != nil {
+			return "", fmt.Errorf("delete cgroup subtree failed: %w", err)
+		}
+	default:
+		return "", fmt.Errorf("delete operation not allowed to current container status: %s", containerState)
 	}
 
 	return deleteParameter.ContainerId, nil
@@ -464,7 +642,7 @@ func (s *ContainerService) deleteContainer(containerId string) error {
 
 func (s *ContainerService) cleanupForwardRules(containerId string) error {
 	// retrieve network info
-	forwards, err := s.ipamStoreHandler.GetForwardInfo(containerId)
+	forwards, err := s.ipamHandler.GetForwardInfo(containerId)
 	if err != nil {
 		return err
 	}
@@ -516,9 +694,19 @@ func (s *ContainerService) deleteCgroupSubtree(containerId string) error {
 
 // == service: stop ==
 func (s *ContainerService) Stop(stopParameter ServiceStopModel) (string, error) {
-	// stop container
-	if err := s.stopContainer(stopParameter.ContainerId); err != nil {
-		return "", fmt.Errorf("stop failed: %w", err)
+	containerState, err := s.getContainerState(stopParameter.ContainerId)
+	if err != nil {
+		return "", err
+	}
+
+	switch containerState {
+	case "running":
+		// stop container
+		if err := s.stopContainer(stopParameter.ContainerId); err != nil {
+			return "", fmt.Errorf("stop failed: %w", err)
+		}
+	default:
+		return "", fmt.Errorf("stop operation not allowed to current container status: %s", containerState)
 	}
 	return stopParameter.ContainerId, nil
 }
@@ -536,3 +724,99 @@ func (s *ContainerService) stopContainer(containerId string) error {
 }
 
 // ===================
+
+// == service: get container list ==
+func (s *ContainerService) GetContainerList() ([]ContainerState, error) {
+	containerList, err := s.csmHandler.GetContainerList()
+	if err != nil {
+		return nil, err
+	}
+	poolList, err := s.ipamHandler.GetPoolList()
+	if err != nil {
+		return nil, err
+	}
+
+	var containerStateList []ContainerState
+	for _, c := range containerList {
+		var (
+			forwards []ForwardInfo
+			address  string
+		)
+		for _, p := range poolList {
+			for addr, info := range p.Allocations {
+				if info.ContainerId != c.ContainerId {
+					continue
+				}
+				address = addr
+				for _, f := range info.Forwards {
+					forwards = append(forwards, ForwardInfo{
+						HostPort:      f.HostPort,
+						ContainerPort: f.ContainerPort,
+						Protocol:      f.Protocol,
+					})
+				}
+			}
+		}
+
+		containerStateList = append(containerStateList, ContainerState{
+			ContainerId: c.ContainerId,
+			State:       c.State,
+			Pid:         c.Pid,
+			Repository:  c.Repository,
+			Reference:   c.Reference,
+			Command:     c.Command,
+
+			Address:  address,
+			Forwards: forwards,
+
+			CreatingAt: c.CreatingAt,
+			CreatedAt:  c.CreatedAt,
+			StartedAt:  c.StartedAt,
+			StoppedAt:  c.StoppedAt,
+		})
+	}
+
+	return containerStateList, nil
+}
+
+// =================================
+
+// == service: get container by id ==
+func (s *ContainerService) GetContainerById(containerId string) (ContainerState, error) {
+	containerState, err := s.csmHandler.GetContainerById(containerId)
+	if err != nil {
+		return ContainerState{}, err
+	}
+	address, networkState, err := s.ipamHandler.GetNetworkInfoById(containerId)
+	if err != nil {
+		return ContainerState{}, err
+	}
+
+	var forwards []ForwardInfo
+	for _, f := range networkState.Forwards {
+		forwards = append(forwards, ForwardInfo{
+			HostPort:      f.HostPort,
+			ContainerPort: f.ContainerPort,
+			Protocol:      f.Protocol,
+		})
+	}
+
+	return ContainerState{
+		ContainerId: containerState.ContainerId,
+		State:       containerState.State,
+		Pid:         containerState.Pid,
+		Repository:  containerState.Repository,
+		Reference:   containerState.Reference,
+		Command:     containerState.Command,
+
+		Address:  address,
+		Forwards: forwards,
+
+		CreatingAt: containerState.CreatingAt,
+		CreatedAt:  containerState.CreatedAt,
+		StartedAt:  containerState.StartedAt,
+		StoppedAt:  containerState.StoppedAt,
+	}, nil
+}
+
+// ==================================

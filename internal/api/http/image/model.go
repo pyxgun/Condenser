@@ -9,9 +9,3 @@ type PullImageRequest struct {
 type RemoveImageRequest struct {
 	Image string `json:"image" example:"alpine:latest"`
 }
-
-type ApiResponse struct {
-	Status  string `json:"status"` // success | fail
-	Message string `json:"message,omitempty"`
-	Data    any    `json:"data,omitempty"`
-}

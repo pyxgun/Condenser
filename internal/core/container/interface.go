@@ -5,4 +5,6 @@ type ContainerServiceHandler interface {
 	Start(startParameter ServiceStartModel) (string, error)
 	Delete(deleteParameter ServiceDeleteModel) (string, error)
 	Stop(stopParameter ServiceStopModel) (string, error)
+	GetContainerList() ([]ContainerState, error)
+	GetContainerById(containerId string) (ContainerState, error)
 }

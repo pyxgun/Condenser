@@ -16,6 +16,21 @@ const docTemplate = `{
     "basePath": "{{.BasePath}}",
     "paths": {
         "/v1/containers": {
+            "get": {
+                "description": "get all container list",
+                "tags": [
+                    "containers"
+                ],
+                "summary": "get container list",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            },
             "post": {
                 "description": "create a new container",
                 "consumes": [
@@ -43,7 +58,33 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/container.ApiResponse"
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/containers/{containerId}": {
+            "get": {
+                "description": "get an exitsting container info",
+                "tags": [
+                    "containers"
+                ],
+                "summary": "get container info",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Container ID",
+                        "name": "containerId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
                         }
                     }
                 }
@@ -69,7 +110,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/container.ApiResponse"
+                            "$ref": "#/definitions/utils.ApiResponse"
                         }
                     }
                 }
@@ -104,7 +145,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/container.ApiResponse"
+                            "$ref": "#/definitions/utils.ApiResponse"
                         }
                     }
                 }
@@ -139,7 +180,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/container.ApiResponse"
+                            "$ref": "#/definitions/utils.ApiResponse"
                         }
                     }
                 }
@@ -165,7 +206,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/container.ApiResponse"
+                            "$ref": "#/definitions/utils.ApiResponse"
                         }
                     }
                 }
@@ -175,20 +216,35 @@ const docTemplate = `{
             "post": {
                 "description": "apply hook from droplet",
                 "tags": [
-                    "Hooks"
+                    "hooks"
                 ],
                 "summary": "apply hook",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.ApiResponse"
+                            "$ref": "#/definitions/utils.ApiResponse"
                         }
                     }
                 }
             }
         },
         "/v1/images": {
+            "get": {
+                "description": "get image list in local storage",
+                "tags": [
+                    "image"
+                ],
+                "summary": "get image list",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            },
             "post": {
                 "description": "pull image from registry",
                 "consumes": [
@@ -216,7 +272,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/image.ApiResponse"
+                            "$ref": "#/definitions/utils.ApiResponse"
                         }
                     }
                 }
@@ -245,10 +301,10 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "Created",
+                    "200": {
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/image.ApiResponse"
+                            "$ref": "#/definitions/utils.ApiResponse"
                         }
                     }
                 }
@@ -256,19 +312,6 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "container.ApiResponse": {
-            "type": "object",
-            "properties": {
-                "data": {},
-                "message": {
-                    "type": "string"
-                },
-                "status": {
-                    "description": "success | fail",
-                    "type": "string"
-                }
-            }
-        },
         "container.CreateContainerRequest": {
             "type": "object",
             "properties": {
@@ -278,9 +321,9 @@ const docTemplate = `{
                         "type": "string"
                     },
                     "example": [
-                        "'/bin/sh'",
-                        "'-c'",
-                        "'echo hello; sleep 60'"
+                        "/bin/sh",
+                        "-c",
+                        "echo hello; sleep 60"
                     ]
                 },
                 "image": {
@@ -293,9 +336,13 @@ const docTemplate = `{
                         "type": "string"
                     },
                     "example": [
-                        "'/host/dir:/container/dir'",
-                        "'/src:/dst'"
+                        "/host/dir:/container/dir",
+                        "/src:/dst"
                     ]
+                },
+                "network": {
+                    "type": "string",
+                    "example": "raind0"
                 },
                 "port": {
                     "type": "array",
@@ -303,8 +350,8 @@ const docTemplate = `{
                         "type": "string"
                     },
                     "example": [
-                        "'8080:80'",
-                        "'4443:443'"
+                        "8080:80",
+                        "4443:443"
                     ]
                 }
             }
@@ -318,9 +365,9 @@ const docTemplate = `{
                         "type": "string"
                     },
                     "example": [
-                        "'/bin/sh'",
-                        "'-c'",
-                        "'echo hello'"
+                        "/bin/sh",
+                        "-c",
+                        "echo hello"
                     ]
                 },
                 "interactive": {
@@ -335,32 +382,6 @@ const docTemplate = `{
                 "interactive": {
                     "type": "boolean",
                     "example": true
-                }
-            }
-        },
-        "http.ApiResponse": {
-            "type": "object",
-            "properties": {
-                "data": {},
-                "message": {
-                    "type": "string"
-                },
-                "status": {
-                    "description": "success | fail",
-                    "type": "string"
-                }
-            }
-        },
-        "image.ApiResponse": {
-            "type": "object",
-            "properties": {
-                "data": {},
-                "message": {
-                    "type": "string"
-                },
-                "status": {
-                    "description": "success | fail",
-                    "type": "string"
                 }
             }
         },
@@ -387,6 +408,19 @@ const docTemplate = `{
                 "image": {
                     "type": "string",
                     "example": "alpine:latest"
+                }
+            }
+        },
+        "utils.ApiResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "success | fail",
+                    "type": "string"
                 }
             }
         }

@@ -15,7 +15,6 @@ func NewImageService() *ImageService {
 	return &ImageService{
 		filesystemHandler: utils.NewFilesystemExecutor(),
 		registryHandler:   dockerhub.NewRegistryDockerHub(),
-		ilmStoreHandler:   ilm.NewIlmStore(env.IlmStorePath),
 		ilmHandler:        ilm.NewIlmManager(ilm.NewIlmStore(env.IlmStorePath)),
 	}
 }
@@ -23,17 +22,29 @@ func NewImageService() *ImageService {
 type ImageService struct {
 	filesystemHandler utils.FilesystemHandler
 	registryHandler   registry.RegistryHandler
-	ilmStoreHandler   ilm.IlmStoreHandler
 	ilmHandler        ilm.IlmHandler
 }
 
 func (s *ImageService) Pull(pullParameter ServicePullModel) error {
+	targetOs := pullParameter.Os
+	if targetOs == "" {
+		targetOs = utils.HostOs()
+	}
+	targetArch := pullParameter.Arch
+	if targetArch == "" {
+		hostArch, err := utils.HostArch()
+		if err != nil {
+			return err
+		}
+		targetArch = hostArch
+	}
+
 	// pull image
 	repository, reference, bundlePath, configPath, rootfsPath, err := s.registryHandler.PullImage(
 		registry.RegistryPullModel{
 			Image: pullParameter.Image,
-			Os:    pullParameter.Os,
-			Arch:  pullParameter.Arch,
+			Os:    targetOs,
+			Arch:  targetArch,
 		},
 	)
 	if err != nil {
@@ -58,7 +69,7 @@ func (s *ImageService) Remove(removeParameter ServiceRemoveModel) error {
 	}
 
 	// remove directory
-	bundlePath, err := s.ilmStoreHandler.GetBundlePath(repo, ref)
+	bundlePath, err := s.ilmHandler.GetBundlePath(repo, ref)
 	if err != nil {
 		return err
 	}
@@ -115,4 +126,22 @@ func (s *ImageService) GetImageConfig(filepath string) (ImageConfigFile, error) 
 		return ImageConfigFile{}, err
 	}
 	return imageConfig, nil
+}
+
+func (s *ImageService) GetImageList() ([]ImageInfo, error) {
+	imageList, err := s.ilmHandler.GetImageList()
+	if err != nil {
+		return nil, err
+	}
+
+	var imageInfo []ImageInfo
+	for _, il := range imageList {
+		imageInfo = append(imageInfo, ImageInfo{
+			Repository: il.Repository,
+			Reference:  il.Reference,
+			CreatedAt:  il.CreatedAt,
+		})
+	}
+
+	return imageInfo, nil
 }

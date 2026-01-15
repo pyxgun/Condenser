@@ -63,6 +63,186 @@ func (m *IpamManager) Release(containerId string) error {
 	})
 }
 
+func (m *IpamManager) GetNetworkList() ([]NetworkList, error) {
+	var networkList []NetworkList
+
+	err := m.ipamStore.withLock(func(st *IpamState) error {
+		for _, p := range st.Pools {
+			networkList = append(networkList, NetworkList{
+				Interface: p.Interface,
+				Address:   p.Address,
+			})
+		}
+		if len(networkList) == 0 {
+			return fmt.Errorf("network is not configured")
+		}
+		return nil
+	})
+	return networkList, err
+}
+
+func (m *IpamManager) GetRuntimeSubnet() (string, error) {
+	var runtimeSubnet string
+
+	err := m.ipamStore.withLock(func(st *IpamState) error {
+		runtimeSubnet = st.RuntimeSubnet
+		if runtimeSubnet == "" {
+			return fmt.Errorf("runtime subnet is not configured")
+		}
+		return nil
+	})
+	return runtimeSubnet, err
+}
+
+func (m *IpamManager) GetDefaultInterface() (string, error) {
+	var defaultInterface string
+
+	err := m.ipamStore.withLock(func(st *IpamState) error {
+		defaultInterface = st.HostInterface
+		if defaultInterface == "" {
+			return fmt.Errorf("default interface is not configured")
+		}
+		return nil
+	})
+	return defaultInterface, err
+}
+
+func (m *IpamManager) GetDefaultInterfaceAddr() (string, error) {
+	var defaultInterfaceAddr string
+
+	err := m.ipamStore.withLock(func(st *IpamState) error {
+		defaultInterfaceAddr = st.HostInterfaceAddr
+		if defaultInterfaceAddr == "" {
+			return fmt.Errorf("default interface address is not configured")
+		}
+		return nil
+	})
+	return defaultInterfaceAddr, err
+}
+
+func (m *IpamManager) GetBridgeAddr(bridgeInterface string) (string, error) {
+	var bridgeAddr string
+
+	err := m.ipamStore.withLock(func(st *IpamState) error {
+		for _, p := range st.Pools {
+			if p.Interface != bridgeInterface {
+				continue
+			}
+			bridgeAddr = p.Address
+			return nil
+		}
+		return fmt.Errorf("interface: %s not found", bridgeInterface)
+	})
+	return bridgeAddr, err
+}
+
+func (m *IpamManager) GetContainerAddress(containerId string) (string, string, string, error) {
+	var (
+		containerAddr   string
+		hostInterface   string
+		bridgeInterface string
+	)
+
+	err := m.ipamStore.withLock(func(st *IpamState) error {
+		hostInterface = st.HostInterface
+		for _, p := range st.Pools {
+			for addr, info := range p.Allocations {
+				if info.ContainerId == containerId {
+					bridgeInterface = p.Interface
+					containerAddr = addr
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("container: %s not found", containerId)
+	})
+	return hostInterface, bridgeInterface, containerAddr, err
+}
+
+func (m *IpamManager) SetForwardInfo(containerId string, sport, dport int, protocol string) error {
+	err := m.ipamStore.withLock(func(st *IpamState) error {
+		for i := range st.Pools {
+			p := st.Pools[i]
+			if p.Allocations == nil {
+				continue
+			}
+
+			for addr, info := range p.Allocations {
+				if info.ContainerId != containerId {
+					continue
+				}
+
+				fi := ForwardInfo{
+					HostPort:      sport,
+					ContainerPort: dport,
+					Protocol:      protocol,
+				}
+
+				alloc := p.Allocations[addr]
+				alloc.Forwards = append(alloc.Forwards, fi)
+				p.Allocations[addr] = alloc
+
+				return nil
+			}
+		}
+		return fmt.Errorf("container: %s not found", containerId)
+	})
+	return err
+}
+
+func (m *IpamManager) GetForwardInfo(containerId string) ([]ForwardInfo, error) {
+	var forwards []ForwardInfo
+	err := m.ipamStore.withLock(func(st *IpamState) error {
+		for _, p := range st.Pools {
+			if p.Allocations == nil {
+				continue
+			}
+			for _, info := range p.Allocations {
+				if info.ContainerId != containerId {
+					continue
+				}
+				for _, f := range info.Forwards {
+					forwards = append(forwards, f)
+				}
+			}
+		}
+		return nil
+	})
+	return forwards, err
+}
+
+func (m *IpamManager) GetPoolList() ([]Pool, error) {
+	var poolList []Pool
+	err := m.ipamStore.withLock(func(st *IpamState) error {
+		for _, p := range st.Pools {
+			poolList = append(poolList, p)
+		}
+		return nil
+	})
+	return poolList, err
+}
+
+func (m *IpamManager) GetNetworkInfoById(containerId string) (string, Allocation, error) {
+	var (
+		address     string
+		networkInfo Allocation
+	)
+	err := m.ipamStore.withLock(func(st *IpamState) error {
+		for _, p := range st.Pools {
+			for addr, info := range p.Allocations {
+				if info.ContainerId != containerId {
+					continue
+				}
+				address = addr
+				networkInfo = p.Allocations[addr]
+				return nil
+			}
+		}
+		return fmt.Errorf("container: %s not found", containerId)
+	})
+	return address, networkInfo, err
+}
+
 func findFreeIpv4(ipnet *net.IPNet, gateway net.IP, alloc map[string]Allocation) (net.IP, error) {
 	network := ipnet.IP.To4()
 	if network == nil {

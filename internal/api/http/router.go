@@ -32,6 +32,8 @@ func NewApiRouter() *chi.Mux {
 
 	// == v1 ==
 	// == containers ==
+	r.Get("/v1/containers", containerHandler.GetContainerList)                                // get container list
+	r.Get("/v1/containers/{containerId}", containerHandler.GetContainerById)                  // get container status by id
 	r.Post("/v1/containers", containerHandler.CreateContainer)                                // create container
 	r.Post("/v1/containers/{containerId}/actions/start", containerHandler.StartContainer)     // start container
 	r.Post("/v1/containers/{containerId}/actions/stop", containerHandler.StopContainer)       // stop container
@@ -39,6 +41,7 @@ func NewApiRouter() *chi.Mux {
 	r.Delete("/v1/containers/{containerId}/actions/delete", containerHandler.DeleteContainer) // delete container
 
 	// == images ==
+	r.Get("/v1/images", imageHandler.GetImageList)   // get image list
 	r.Post("/v1/images", imageHandler.PullImage)     // pull image
 	r.Delete("/v1/images", imageHandler.RemoveImage) // remove image
 

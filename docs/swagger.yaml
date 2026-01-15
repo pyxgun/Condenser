@@ -1,20 +1,11 @@
 definitions:
-  container.ApiResponse:
-    properties:
-      data: {}
-      message:
-        type: string
-      status:
-        description: success | fail
-        type: string
-    type: object
   container.CreateContainerRequest:
     properties:
       command:
         example:
-        - '''/bin/sh'''
-        - '''-c'''
-        - '''echo hello; sleep 60'''
+        - /bin/sh
+        - -c
+        - echo hello; sleep 60
         items:
           type: string
         type: array
@@ -23,15 +14,18 @@ definitions:
         type: string
       mount:
         example:
-        - '''/host/dir:/container/dir'''
-        - '''/src:/dst'''
+        - /host/dir:/container/dir
+        - /src:/dst
         items:
           type: string
         type: array
+      network:
+        example: raind0
+        type: string
       port:
         example:
-        - '''8080:80'''
-        - '''4443:443'''
+        - 8080:80
+        - 4443:443
         items:
           type: string
         type: array
@@ -40,9 +34,9 @@ definitions:
     properties:
       command:
         example:
-        - '''/bin/sh'''
-        - '''-c'''
-        - '''echo hello'''
+        - /bin/sh
+        - -c
+        - echo hello
         items:
           type: string
         type: array
@@ -55,24 +49,6 @@ definitions:
       interactive:
         example: true
         type: boolean
-    type: object
-  http.ApiResponse:
-    properties:
-      data: {}
-      message:
-        type: string
-      status:
-        description: success | fail
-        type: string
-    type: object
-  image.ApiResponse:
-    properties:
-      data: {}
-      message:
-        type: string
-      status:
-        description: success | fail
-        type: string
     type: object
   image.PullImageRequest:
     properties:
@@ -92,10 +68,29 @@ definitions:
         example: alpine:latest
         type: string
     type: object
+  utils.ApiResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      status:
+        description: success | fail
+        type: string
+    type: object
 info:
   contact: {}
 paths:
   /v1/containers:
+    get:
+      description: get all container list
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: get container list
+      tags:
+      - containers
     post:
       consumes:
       - application/json
@@ -113,8 +108,25 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/container.ApiResponse'
+            $ref: '#/definitions/utils.ApiResponse'
       summary: Create a container
+      tags:
+      - containers
+  /v1/containers/{containerId}:
+    get:
+      description: get an exitsting container info
+      parameters:
+      - description: Container ID
+        in: path
+        name: containerId
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: get container info
       tags:
       - containers
   /v1/containers/{containerId}/actions/delete:
@@ -130,7 +142,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/container.ApiResponse'
+            $ref: '#/definitions/utils.ApiResponse'
       summary: delete a container
       tags:
       - containers
@@ -153,7 +165,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/container.ApiResponse'
+            $ref: '#/definitions/utils.ApiResponse'
       summary: exec a container
       tags:
       - containers
@@ -176,7 +188,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/container.ApiResponse'
+            $ref: '#/definitions/utils.ApiResponse'
       summary: start a container
       tags:
       - containers
@@ -193,7 +205,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/container.ApiResponse'
+            $ref: '#/definitions/utils.ApiResponse'
       summary: stop a container
       tags:
       - containers
@@ -204,10 +216,10 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/http.ApiResponse'
+            $ref: '#/definitions/utils.ApiResponse'
       summary: apply hook
       tags:
-      - Hooks
+      - hooks
   /v1/images:
     delete:
       consumes:
@@ -223,11 +235,21 @@ paths:
       produces:
       - application/json
       responses:
-        "201":
-          description: Created
+        "200":
+          description: OK
           schema:
-            $ref: '#/definitions/image.ApiResponse'
+            $ref: '#/definitions/utils.ApiResponse'
       summary: remove image
+      tags:
+      - image
+    get:
+      description: get image list in local storage
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: get image list
       tags:
       - image
     post:
@@ -247,7 +269,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/image.ApiResponse'
+            $ref: '#/definitions/utils.ApiResponse'
       summary: pull image
       tags:
       - image

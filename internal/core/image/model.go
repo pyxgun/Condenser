@@ -1,5 +1,7 @@
 package image
 
+import "time"
+
 type ServicePullModel struct {
 	Image string
 	Os    string
@@ -20,4 +22,10 @@ type ImageConfigObject struct {
 
 type ImageConfigFile struct {
 	Config ImageConfigObject `json:"config"`
+}
+
+type ImageInfo struct {
+	Repository string    `json:"repository"`
+	Reference  string    `json:"reference"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
