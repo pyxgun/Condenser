@@ -17,3 +17,9 @@ type ImageLayerState struct {
 	Version      string                    `json:"version"`
 	Repositories map[string]RepositoryInfo `json:"repositories"`
 }
+
+type ImageInfo struct {
+	Repository string
+	Reference  string
+	CreatedAt  time.Time
+}

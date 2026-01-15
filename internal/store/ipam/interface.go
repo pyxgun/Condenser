@@ -14,4 +14,6 @@ type IpamHandler interface {
 	GetContainerAddress(containerId string) (string, string, string, error)
 	SetForwardInfo(containerId string, sport, dport int, protocol string) error
 	GetForwardInfo(containerId string) ([]ForwardInfo, error)
+	GetPoolList() ([]Pool, error)
+	GetNetworkInfoById(containerId string) (string, Allocation, error)
 }

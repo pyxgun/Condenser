@@ -10,4 +10,5 @@ type IlmHandler interface {
 	GetBundlePath(repository string, reference string) (string, error)
 	GetConfigPath(repository string, reference string) (string, error)
 	GetRootfsPath(repository string, reference string) (string, error)
+	GetImageList() ([]ImageInfo, error)
 }

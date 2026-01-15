@@ -94,3 +94,21 @@ func (s *IlmManager) GetRootfsPath(repository string, reference string) (string,
 	})
 	return rootfsPath, err
 }
+
+func (s *IlmManager) GetImageList() ([]ImageInfo, error) {
+	var imageList []ImageInfo
+
+	err := s.ilmStore.withLock(func(st *ImageLayerState) error {
+		for repo, refs := range st.Repositories {
+			for ref, info := range refs.References {
+				imageList = append(imageList, ImageInfo{
+					Repository: repo,
+					Reference:  ref,
+					CreatedAt:  info.CreatedAt,
+				})
+			}
+		}
+		return nil
+	})
+	return imageList, err
+}

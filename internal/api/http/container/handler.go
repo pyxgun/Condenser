@@ -175,3 +175,46 @@ func (h *RequestHandler) DeleteContainer(w http.ResponseWriter, r *http.Request)
 	// encode response
 	apimodel.RespondSuccess(w, http.StatusOK, "container deleted", DeleteContainerResponse{Id: result})
 }
+
+// GetContainerList godoc
+// @Summary get container list
+// @Description get all container list
+// @Tags containers
+// @Success 200 {object} apimodel.ApiResponse
+// @Router /v1/containers [get]
+func (h *RequestHandler) GetContainerList(w http.ResponseWriter, r *http.Request) {
+	// service: get container list
+	containerList, err := h.serviceHandler.GetContainerList()
+	if err != nil {
+		apimodel.RespondFail(w, http.StatusInternalServerError, "retrieve container list failed: "+err.Error(), nil)
+		return
+	}
+
+	// encode response
+	apimodel.RespondSuccess(w, http.StatusOK, "retrieve container list success", containerList)
+}
+
+// GetContainerById godoc
+// @Summary get container info
+// @Description get an exitsting container info
+// @Tags containers
+// @Param containerId path string true "Container ID"
+// @Success 200 {object} apimodel.ApiResponse
+// @Router /v1/containers/{containerId} [get]
+func (h *RequestHandler) GetContainerById(w http.ResponseWriter, r *http.Request) {
+	containerId := chi.URLParam(r, "containerId")
+	if containerId == "" {
+		apimodel.RespondFail(w, http.StatusBadRequest, "missing container Id", StartContainerResponse{Id: ""})
+		return
+	}
+
+	// service: get container by id
+	containerInfo, err := h.serviceHandler.GetContainerById(containerId)
+	if err != nil {
+		apimodel.RespondFail(w, http.StatusInternalServerError, err.Error(), nil)
+		return
+	}
+
+	// encode response
+	apimodel.RespondSuccess(w, http.StatusOK, "retrieve container info success", containerInfo)
+}

@@ -78,3 +78,21 @@ func (h *RequestHandler) RemoveImage(w http.ResponseWriter, r *http.Request) {
 	// encode response
 	apimodel.RespondSuccess(w, http.StatusOK, "remove completed", req)
 }
+
+// GetImageList godoc
+// @Summary get image list
+// @Description get image list in local storage
+// @Tags image
+// @Success 200 {object} apimodel.ApiResponse
+// @Router /v1/images [get]
+func (h *RequestHandler) GetImageList(w http.ResponseWriter, r *http.Request) {
+	// service
+	imageList, err := h.serviceHandler.GetImageList()
+	if err != nil {
+		apimodel.RespondFail(w, http.StatusInternalServerError, err.Error(), nil)
+		return
+	}
+
+	// encode response
+	apimodel.RespondSuccess(w, http.StatusOK, "retrieve image list success", imageList)
+}

@@ -114,3 +114,21 @@ func (s *ImageService) GetImageConfig(filepath string) (ImageConfigFile, error) 
 	}
 	return imageConfig, nil
 }
+
+func (s *ImageService) GetImageList() ([]ImageInfo, error) {
+	imageList, err := s.ilmHandler.GetImageList()
+	if err != nil {
+		return nil, err
+	}
+
+	var imageInfo []ImageInfo
+	for _, il := range imageList {
+		imageInfo = append(imageInfo, ImageInfo{
+			Repository: il.Repository,
+			Reference:  il.Reference,
+			CreatedAt:  il.CreatedAt,
+		})
+	}
+
+	return imageInfo, nil
+}

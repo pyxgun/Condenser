@@ -22,7 +22,7 @@ type RequestHandler struct {
 // ApplyHook godoc
 // @Summary apply hook
 // @Description apply hook from droplet
-// @Tags Hooks
+// @Tags hooks
 // @Success 200 {object} apimodel.ApiResponse
 // @Router /v1/hooks/droplet [post]
 func (h *RequestHandler) ApplyHook(w http.ResponseWriter, r *http.Request) {

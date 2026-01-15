@@ -195,6 +195,38 @@ func (m *IpamManager) GetForwardInfo(containerId string) ([]ForwardInfo, error) 
 	return forwards, err
 }
 
+func (m *IpamManager) GetPoolList() ([]Pool, error) {
+	var poolList []Pool
+	err := m.ipamStore.withLock(func(st *IpamState) error {
+		for _, p := range st.Pools {
+			poolList = append(poolList, p)
+		}
+		return nil
+	})
+	return poolList, err
+}
+
+func (m *IpamManager) GetNetworkInfoById(containerId string) (string, Allocation, error) {
+	var (
+		address     string
+		networkInfo Allocation
+	)
+	err := m.ipamStore.withLock(func(st *IpamState) error {
+		for _, p := range st.Pools {
+			for addr, info := range p.Allocations {
+				if info.ContainerId != containerId {
+					continue
+				}
+				address = addr
+				networkInfo = p.Allocations[addr]
+				return nil
+			}
+		}
+		return fmt.Errorf("container: %s not found", containerId)
+	})
+	return address, networkInfo, err
+}
+
 func findFreeIpv4(ipnet *net.IPNet, gateway net.IP, alloc map[string]Allocation) (net.IP, error) {
 	network := ipnet.IP.To4()
 	if network == nil {

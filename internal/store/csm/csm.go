@@ -68,3 +68,29 @@ func (m *CsmManager) UpdateContainer(containerId string, state string, pid int) 
 		return nil
 	})
 }
+
+func (m *CsmManager) GetContainerList() ([]ContainerInfo, error) {
+	var containerList []ContainerInfo
+	err := m.csmStore.withLock(func(st *ContainerState) error {
+		for _, c := range st.Containers {
+			containerList = append(containerList, c)
+		}
+		return nil
+	})
+	return containerList, err
+}
+
+func (m *CsmManager) GetContainerById(containerId string) (ContainerInfo, error) {
+	var containerInfo ContainerInfo
+	err := m.csmStore.withLock(func(st *ContainerState) error {
+		for _, c := range st.Containers {
+			if c.ContainerId != containerId {
+				continue
+			}
+			containerInfo = c
+			return nil
+		}
+		return fmt.Errorf("container: %s not found", containerId)
+	})
+	return containerInfo, err
+}

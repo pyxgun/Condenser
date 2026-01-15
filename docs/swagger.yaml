@@ -78,6 +78,16 @@ info:
   contact: {}
 paths:
   /v1/containers:
+    get:
+      description: get all container list
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: get container list
+      tags:
+      - containers
     post:
       consumes:
       - application/json
@@ -97,6 +107,23 @@ paths:
           schema:
             $ref: '#/definitions/utils.ApiResponse'
       summary: Create a container
+      tags:
+      - containers
+  /v1/containers/{containerId}:
+    get:
+      description: get an exitsting container info
+      parameters:
+      - description: Container ID
+        in: path
+        name: containerId
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: get container info
       tags:
       - containers
   /v1/containers/{containerId}/actions/delete:
@@ -189,7 +216,7 @@ paths:
             $ref: '#/definitions/utils.ApiResponse'
       summary: apply hook
       tags:
-      - Hooks
+      - hooks
   /v1/images:
     delete:
       consumes:
@@ -210,6 +237,16 @@ paths:
           schema:
             $ref: '#/definitions/utils.ApiResponse'
       summary: remove image
+      tags:
+      - image
+    get:
+      description: get image list in local storage
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: get image list
       tags:
       - image
     post:
