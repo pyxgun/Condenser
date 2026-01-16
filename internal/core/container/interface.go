@@ -8,3 +8,7 @@ type ContainerServiceHandler interface {
 	GetContainerList() ([]ContainerState, error)
 	GetContainerById(containerId string) (ContainerState, error)
 }
+
+type CgroupServiceHandler interface {
+	ChangeCgroupMode(containerId string) error
+}
