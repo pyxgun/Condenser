@@ -83,9 +83,18 @@ func (h *DropletHandler) Spec(specParameter runtime.SpecModel) error {
 }
 
 func (h *DropletHandler) Create(createParameter runtime.CreateModel) error {
-	args := []string{
-		"create",
-		createParameter.ContainerId,
+	var args []string
+	if createParameter.Tty {
+		args = []string{
+			"create",
+			"-t",
+			createParameter.ContainerId,
+		}
+	} else {
+		args = []string{
+			"create",
+			createParameter.ContainerId,
+		}
 	}
 	runtimeCreate := h.commandFactory.Command(runtimePath, args...)
 	out, err := runtimeCreate.CombineOutput()

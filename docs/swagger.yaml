@@ -29,6 +29,9 @@ definitions:
         items:
           type: string
         type: array
+      tty:
+        example: false
+        type: boolean
     type: object
   container.ExecContainerRequest:
     properties:
@@ -40,14 +43,14 @@ definitions:
         items:
           type: string
         type: array
-      interactive:
+      tty:
         example: true
         type: boolean
     type: object
   container.StartContainerRequest:
     properties:
-      interactive:
-        example: true
+      tty:
+        example: false
         type: boolean
     type: object
   image.PullImageRequest:

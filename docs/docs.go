@@ -353,6 +353,10 @@ const docTemplate = `{
                         "8080:80",
                         "4443:443"
                     ]
+                },
+                "tty": {
+                    "type": "boolean",
+                    "example": false
                 }
             }
         },
@@ -370,7 +374,7 @@ const docTemplate = `{
                         "echo hello"
                     ]
                 },
-                "interactive": {
+                "tty": {
                     "type": "boolean",
                     "example": true
                 }
@@ -379,9 +383,9 @@ const docTemplate = `{
         "container.StartContainerRequest": {
             "type": "object",
             "properties": {
-                "interactive": {
+                "tty": {
                     "type": "boolean",
-                    "example": true
+                    "example": false
                 }
             }
         },

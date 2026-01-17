@@ -7,6 +7,7 @@ type CreateContainerRequest struct {
 	Port    []string `json:"port" example:"8080:80,4443:443"`
 	Mount   []string `json:"mount" example:"/host/dir:/container/dir,/src:/dst"`
 	Network string   `json:"network" example:"raind0"`
+	Tty     bool     `json:"tty" example:"false"`
 }
 
 type CreateContainerResponse struct {
@@ -15,7 +16,7 @@ type CreateContainerResponse struct {
 
 // == start ==
 type StartContainerRequest struct {
-	Interactive bool `json:"interactive" example:"true"`
+	Tty bool `json:"tty" example:"false"`
 }
 
 type StartContainerResponse struct {
@@ -29,8 +30,8 @@ type StopContainerResponse struct {
 
 // == exec ==
 type ExecContainerRequest struct {
-	Command     []string `json:"command" example:"/bin/sh,-c,echo hello"`
-	Interactive bool     `json:"interactive" example:"true"`
+	Command []string `json:"command" example:"/bin/sh,-c,echo hello"`
+	Tty     bool     `json:"tty" example:"true"`
 }
 
 type ExecContainerResponse struct {

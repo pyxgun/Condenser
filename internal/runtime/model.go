@@ -32,11 +32,12 @@ type SpecModel struct {
 
 type CreateModel struct {
 	ContainerId string
+	Tty         bool
 }
 
 type StartModel struct {
 	ContainerId string
-	Interactive bool
+	Tty         bool
 }
 
 type DeleteModel struct {

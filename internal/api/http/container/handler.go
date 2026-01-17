@@ -44,6 +44,7 @@ func (h *RequestHandler) CreateContainer(w http.ResponseWriter, r *http.Request)
 			Port:    req.Port,
 			Mount:   req.Mount,
 			Network: req.Network,
+			Tty:     req.Tty,
 		},
 	)
 	if err != nil {
@@ -81,7 +82,7 @@ func (h *RequestHandler) StartContainer(w http.ResponseWriter, r *http.Request) 
 	result, err := h.serviceHandler.Start(
 		container.ServiceStartModel{
 			ContainerId: containerId,
-			Interactive: req.Interactive,
+			Tty:         req.Tty,
 		},
 	)
 	if err != nil {
