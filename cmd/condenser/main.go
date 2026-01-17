@@ -16,15 +16,19 @@ func main() {
 	}
 
 	// == rest api ==
-	// public api
-	publicAddr := ":7755"
-	publicRouter := httpapi.NewApiRouter()
+	// start Management Server
+	managementAddr := "127.0.0.1:7755"
+	managementRouter := httpapi.NewApiRouter()
+	go func() {
+		log.Printf("[*] management server listening on %s", managementAddr)
+		if err := http.ListenAndServe(managementAddr, managementRouter); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
-	// hook (localhost only)
 	hookAddr := ":7756"
 	hookRouter := httpapi.NewHookRouter()
-
-	// execute router
+	// start Hook Server
 	go func() {
 		log.Printf("[*] hook server listening on %s", hookAddr)
 		if err := http.ListenAndServe(hookAddr, hookRouter); err != nil {
@@ -32,15 +36,18 @@ func main() {
 		}
 	}()
 
-	// monitoring
-	containerMonitoring := monitor.NewContainerMonitor()
+	// start Swagger
+	swaggerAddr := ":7757"
+	swaggerRouter := httpapi.NewSwaggerRouter()
 	go func() {
-		log.Println("[*] Container Monitoring Start")
-		containerMonitoring.Start()
+		log.Printf("[*] swagger listening on %s", swaggerAddr)
+		if err := http.ListenAndServe(swaggerAddr, swaggerRouter); err != nil {
+			log.Fatal(err)
+		}
 	}()
 
-	log.Printf("[*] api server listening on %s", publicAddr)
-	if err := http.ListenAndServe(publicAddr, publicRouter); err != nil {
-		log.Fatal(err)
-	}
+	// start monitoring
+	log.Println("[*] Container Monitoring Start")
+	containerMonitoring := monitor.NewContainerMonitor()
+	containerMonitoring.Start()
 }

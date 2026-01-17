@@ -6,6 +6,7 @@ import (
 	containerHandler "condenser/internal/api/http/container"
 	hookHandler "condenser/internal/api/http/hook"
 	imageHandler "condenser/internal/api/http/image"
+	websocketHandler "condenser/internal/api/http/websocket"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
@@ -17,10 +18,8 @@ import (
 // @BasePath /
 // @schemes http
 
-func NewApiRouter() *chi.Mux {
+func NewSwaggerRouter() *chi.Mux {
 	r := chi.NewRouter()
-	containerHandler := containerHandler.NewRequestHandler()
-	imageHandler := imageHandler.NewRequestHandler()
 
 	// middleware
 	r.Use(middleware.RequestID)
@@ -29,6 +28,20 @@ func NewApiRouter() *chi.Mux {
 
 	// == swagger ==
 	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
+
+	return r
+}
+
+func NewApiRouter() *chi.Mux {
+	r := chi.NewRouter()
+	containerHandler := containerHandler.NewRequestHandler()
+	imageHandler := imageHandler.NewRequestHandler()
+	socketHandler := websocketHandler.NewRequestHandler()
+
+	// middleware
+	r.Use(middleware.RequestID)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
 
 	// == v1 ==
 	// == containers ==
@@ -44,6 +57,9 @@ func NewApiRouter() *chi.Mux {
 	r.Get("/v1/images", imageHandler.GetImageList)   // get image list
 	r.Post("/v1/images", imageHandler.PullImage)     // pull image
 	r.Delete("/v1/images", imageHandler.RemoveImage) // remove image
+
+	// == websocket ==
+	r.Get("/v1/containers/{containerId}/attach", socketHandler.ServeHTTP)
 
 	return r
 }

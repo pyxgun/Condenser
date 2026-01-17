@@ -10,11 +10,12 @@ type ServiceCreateModel struct {
 	Port    []string
 	Mount   []string
 	Network string
+	Tty     bool
 }
 
 type ServiceStartModel struct {
 	ContainerId string
-	Interactive bool
+	Tty         bool
 }
 
 type ServiceDeleteModel struct {

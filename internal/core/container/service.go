@@ -150,7 +150,7 @@ func (s *ContainerService) Create(createParameter ServiceCreateModel) (string, e
 	rollbackFlag.ForwardRule = true
 
 	// 12. create container
-	if err := s.createContainer(containerId); err != nil {
+	if err := s.createContainer(containerId, createParameter.Tty); err != nil {
 		if err := s.rollback(rollbackFlag, containerId); err != nil {
 			return "", fmt.Errorf("rollback failed: %w", err)
 		}
@@ -439,9 +439,9 @@ func (s *ContainerService) createContainerSpec(
 	return nil
 }
 
-func (s *ContainerService) createContainer(containerId string) error {
+func (s *ContainerService) createContainer(containerId string, tty bool) error {
 	// runtime: create
-	if err := s.runtimeHandler.Create(runtime.CreateModel{ContainerId: containerId}); err != nil {
+	if err := s.runtimeHandler.Create(runtime.CreateModel{ContainerId: containerId, Tty: tty}); err != nil {
 		return err
 	}
 	return nil
@@ -556,7 +556,7 @@ func (s *ContainerService) Start(startParameter ServiceStartModel) (string, erro
 	switch containerState {
 	case "created":
 		// start container
-		if err := s.startContainer(startParameter.ContainerId, startParameter.Interactive); err != nil {
+		if err := s.startContainer(startParameter.ContainerId, startParameter.Tty); err != nil {
 			return "", fmt.Errorf("start container failed: %w", err)
 		}
 
@@ -566,11 +566,11 @@ func (s *ContainerService) Start(startParameter ServiceStartModel) (string, erro
 
 	case "stopped":
 		// create container
-		if err := s.createContainer(startParameter.ContainerId); err != nil {
+		if err := s.createContainer(startParameter.ContainerId, startParameter.Tty); err != nil {
 			return "", fmt.Errorf("start container failed: %w", err)
 		}
 		// start container
-		if err := s.startContainer(startParameter.ContainerId, startParameter.Interactive); err != nil {
+		if err := s.startContainer(startParameter.ContainerId, startParameter.Tty); err != nil {
 			return "", fmt.Errorf("start container failed: %w", err)
 		}
 
@@ -581,12 +581,12 @@ func (s *ContainerService) Start(startParameter ServiceStartModel) (string, erro
 	return startParameter.ContainerId, nil
 }
 
-func (s *ContainerService) startContainer(containerId string, interactive bool) error {
+func (s *ContainerService) startContainer(containerId string, tty bool) error {
 	// runtime: start
 	if err := s.runtimeHandler.Start(
 		runtime.StartModel{
 			ContainerId: containerId,
-			Interactive: interactive,
+			Tty:         tty,
 		},
 	); err != nil {
 		return err
