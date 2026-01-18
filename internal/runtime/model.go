@@ -47,3 +47,9 @@ type DeleteModel struct {
 type StopModel struct {
 	ContainerId string
 }
+
+type ExecModel struct {
+	ContainerId string
+	Entrypoint  []string
+	Tty         bool
+}

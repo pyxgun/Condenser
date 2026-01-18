@@ -37,6 +37,7 @@ func NewApiRouter() *chi.Mux {
 	containerHandler := containerHandler.NewRequestHandler()
 	imageHandler := imageHandler.NewRequestHandler()
 	socketHandler := websocketHandler.NewRequestHandler()
+	execSocketHandler := websocketHandler.NewExecRequestHandler()
 
 	// middleware
 	r.Use(middleware.RequestID)
@@ -60,6 +61,7 @@ func NewApiRouter() *chi.Mux {
 
 	// == websocket ==
 	r.Get("/v1/containers/{containerId}/attach", socketHandler.ServeHTTP)
+	r.Get("/v1/containers/{containerId}/exec/attach", execSocketHandler.ServeHTTP)
 
 	return r
 }
