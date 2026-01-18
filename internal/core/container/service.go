@@ -734,6 +734,23 @@ func (s *ContainerService) stopContainer(containerId string) error {
 
 // ===================
 
+// == service: exec container ==
+func (s *ContainerService) Exec(execParameter ServiceExecModel) error {
+	// runtime: exec
+	if err := s.runtimeHandler.Exec(
+		runtime.ExecModel{
+			ContainerId: execParameter.ContainerId,
+			Tty:         execParameter.Tty,
+			Entrypoint:  execParameter.Entrypoint,
+		},
+	); err != nil {
+		return err
+	}
+	return nil
+}
+
+// =============================
+
 // == service: get container list ==
 func (s *ContainerService) GetContainerList() ([]ContainerState, error) {
 	containerList, err := s.csmHandler.GetContainerList()

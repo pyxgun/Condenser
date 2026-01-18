@@ -2,12 +2,17 @@ package websocket
 
 import (
 	"condenser/internal/env"
+	"context"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -21,6 +26,15 @@ func NewRequestHandler() *Handler {
 			SockName:      "tty.sock",
 		},
 		Upgrader: websocket.Upgrader{},
+	}
+}
+
+func NewExecRequestHandler() *Handler {
+	return &Handler{
+		Resolver: StaticResolver{
+			ContainerRoot: env.ContainerRootDir,
+			SockName:      "exec_tty.sock",
+		},
 	}
 }
 
@@ -64,20 +78,35 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("panic in exec-attach: container=%s: %v", containerId, rec)
+		}
+		_ = ws.Close()
+	}()
 
 	sockPath, err := h.Resolver.ConsoleSockPath(containerId)
 	if err != nil {
 		_ = ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("resolve sock path failed: %v", err)))
 		return
 	}
+	log.Printf("target socket: %s", sockPath)
 
-	unixConn, err := net.Dial("unix", sockPath)
+	// --- Dial retry (exec-shim/attach race mitigation) ---
+	unixConn, err := dialUnixWithRetry(r.Context(), sockPath, 2*time.Second, 50*time.Millisecond)
 	if err != nil {
-		_ = ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("dial unix sock failed: %v", err)))
+		log.Printf("dial unix sock failed (after retry): sock=%s err=%v", sockPath, err)
+
+		// Prefer WS close control rather than plain text, so client treats it as normal closure.
+		_ = ws.WriteControl(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseTryAgainLater, "target not ready"),
+			time.Now().Add(1*time.Second),
+		)
 		return
 	}
 	defer unixConn.Close()
+	// --- end retry ---
 
 	wsr := newWSBinaryStreamReader(ws) // WS(binary messages) -> stream reader
 	wsw := newWSBinaryStreamWriter(ws) // stream writer -> WS(binary messages)
@@ -101,8 +130,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// close both session
-	// close both session
 	e := <-errCh
+	log.Printf("exec-attach stream end: %v", e)
 	_ = unixConn.Close()
 
 	// send CloseMessage
@@ -116,6 +145,64 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 
 	_ = e
+}
+
+// dialUnixWithRetry tries to connect to a unix domain socket until it succeeds
+// or the deadline expires. This mitigates the race where the socket path exists
+// but the server process hasn't started listening yet.
+func dialUnixWithRetry(ctx context.Context, sockPath string, timeout time.Duration, interval time.Duration) (net.Conn, error) {
+	deadline := time.Now().Add(timeout)
+
+	var lastErr error
+	for {
+		conn, err := net.Dial("unix", sockPath)
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+
+		// Only retry for "not ready yet" conditions (common for unix sockets).
+		// If it's some other error, bubble up quickly.
+		// Note: net.Dial wraps errors; we conservatively retry on ECONNREFUSED/ENOENT.
+		if !isRetryableUnixDialErr(err) {
+			return nil, err
+		}
+
+		if time.Now().After(deadline) {
+			return nil, lastErr
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(interval):
+		}
+	}
+}
+
+func isRetryableUnixDialErr(err error) bool {
+	// Common patterns:
+	// - connect: connection refused (server not listening yet / stale socket)
+	// - no such file or directory (path not created yet)
+	if errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.ENOENT) {
+		return true
+	}
+
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		// opErr.Err may be *os.SyscallError or syscall.Errno
+		if errors.Is(opErr.Err, syscall.ECONNREFUSED) || errors.Is(opErr.Err, syscall.ENOENT) {
+			return true
+		}
+		var sysErr *os.SyscallError
+		if errors.As(opErr.Err, &sysErr) {
+			if errors.Is(sysErr.Err, syscall.ECONNREFUSED) || errors.Is(sysErr.Err, syscall.ENOENT) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // --- WebSocket stream adapters ---

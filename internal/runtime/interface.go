@@ -6,4 +6,5 @@ type RuntimeHandler interface {
 	Start(startParameter StartModel) error
 	Delete(deleteParameter DeleteModel) error
 	Stop(stopParameter StopModel) error
+	Exec(execParameter ExecModel) error
 }

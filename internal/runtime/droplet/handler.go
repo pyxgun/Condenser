@@ -159,3 +159,30 @@ func (h *DropletHandler) Stop(stopParameter runtime.StopModel) error {
 	}
 	return nil
 }
+
+func (h *DropletHandler) Exec(execParameter runtime.ExecModel) error {
+	var args []string
+	if execParameter.Tty {
+		args = []string{
+			"exec",
+			"-t",
+			execParameter.ContainerId,
+		}
+	} else {
+		args = []string{
+			"exec",
+			execParameter.ContainerId,
+		}
+	}
+	args = append(args, execParameter.Entrypoint...)
+	runtimeExec := h.commandFactory.Command(runtimePath, args...)
+	out, err := runtimeExec.CombineOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg == "" {
+			return fmt.Errorf("droplet exec failed: %w", err)
+		}
+		return fmt.Errorf("droplet exec failed: %s: %w", msg, err)
+	}
+	return nil
+}
