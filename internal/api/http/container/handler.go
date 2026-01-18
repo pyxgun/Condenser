@@ -145,6 +145,16 @@ func (h *RequestHandler) ExecContainer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// service: exec
+	err := h.serviceHandler.Exec(container.ServiceExecModel{
+		ContainerId: containerId,
+		Tty:         req.Tty,
+		Entrypoint:  req.Command,
+	})
+	if err != nil {
+		apimodel.RespondFail(w, http.StatusInternalServerError, "service failed: "+err.Error(), nil)
+	}
+
 	// encode response
 	apimodel.RespondSuccess(w, http.StatusOK, "container executed", ExecContainerResponse{Id: containerId})
 }

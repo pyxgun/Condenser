@@ -26,6 +26,12 @@ type ServiceStopModel struct {
 	ContainerId string
 }
 
+type ServiceExecModel struct {
+	ContainerId string
+	Tty         bool
+	Entrypoint  []string
+}
+
 type ForwardInfo struct {
 	HostPort      int    `json:"source"`
 	ContainerPort int    `json:"destination"`
