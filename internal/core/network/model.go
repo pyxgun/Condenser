@@ -5,3 +5,11 @@ type ServiceNetworkModel struct {
 	ContainerPort string
 	Protocol      string
 }
+
+type InputRuleModel struct {
+	SourceAddr string
+	DestAddr   string
+	Protocol   string
+	SourcePort int
+	DestPort   int
+}
