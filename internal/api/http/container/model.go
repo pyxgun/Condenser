@@ -8,6 +8,7 @@ type CreateContainerRequest struct {
 	Mount   []string `json:"mount" example:"/host/dir:/container/dir,/src:/dst"`
 	Network string   `json:"network" example:"raind0"`
 	Tty     bool     `json:"tty" example:"false"`
+	Name    string   `json:"name"  example:"my-container"`
 }
 
 type CreateContainerResponse struct {

@@ -49,8 +49,21 @@ type ContainerService struct {
 
 // == service: create ==
 func (s *ContainerService) Create(createParameter ServiceCreateModel) (id string, err error) {
-	// 1. generate container id
+	// 1. generate container id and name
 	containerId := utils.NewUlid()
+	//    if name is not set, generate a random name
+	containerName := createParameter.Name
+	if containerName == "" {
+		containerName, err = s.generateContainerName()
+		if err != nil {
+			return "", err
+		}
+	} else {
+		// validate the name is not used by other container
+		if s.csmHandler.IsNameAlreadyUsed(containerName) {
+			return "", fmt.Errorf("name: %s already used by other container", containerName)
+		}
+	}
 
 	// RollbackFlag for handling rollback handling when process is not completed successfuly
 	var rollbackFlag RollbackFlag
@@ -104,7 +117,7 @@ func (s *ContainerService) Create(createParameter ServiceCreateModel) (id string
 	} else {
 		command = slices.Concat(imageConfig.Config.Entrypoint, imageConfig.Config.Cmd)
 	}
-	if err := s.csmHandler.StoreContainer(containerId, "creating", 0, imageRepo, imageRef, command); err != nil {
+	if err := s.csmHandler.StoreContainer(containerId, "creating", 0, imageRepo, imageRef, command, containerName); err != nil {
 		return "", err
 	}
 	rollbackFlag.CSMEntry = true
@@ -183,6 +196,23 @@ func (s *ContainerService) rollback(rollbackFlag RollbackFlag, containerId strin
 		}
 	}
 	return nil
+}
+
+func (s *ContainerService) generateContainerName() (string, error) {
+	genCount := 0
+	for {
+		randName, err := utils.GenerateRandName()
+		if err != nil {
+			return "", err
+		}
+		if !s.csmHandler.IsNameAlreadyUsed(randName) {
+			return randName, nil
+		}
+		if genCount >= 10 {
+			return "", fmt.Errorf("cannot assign random name")
+		}
+		genCount++
+	}
 }
 
 func (s *ContainerService) pullImage(targetImage string, os string, arch string) error {
@@ -537,7 +567,13 @@ func (s *ContainerService) getContainerState(containerId string) (string, error)
 
 // == service: start ==
 func (s *ContainerService) Start(startParameter ServiceStartModel) (string, error) {
-	containerState, err := s.getContainerState(startParameter.ContainerId)
+	// resolve container id
+	containerId, err := s.csmHandler.ResolveContainerId(startParameter.ContainerId)
+	if err != nil {
+		return "", fmt.Errorf("container: %s not found", startParameter.ContainerId)
+	}
+
+	containerState, err := s.getContainerState(containerId)
 	if err != nil {
 		return "", err
 	}
@@ -545,21 +581,21 @@ func (s *ContainerService) Start(startParameter ServiceStartModel) (string, erro
 	switch containerState {
 	case "created":
 		// start container
-		if err := s.startContainer(startParameter.ContainerId, startParameter.Tty); err != nil {
+		if err := s.startContainer(containerId, startParameter.Tty); err != nil {
 			return "", fmt.Errorf("start container failed: %w", err)
 		}
 
 	case "running":
 		// already started. ignore operation
-		return "", fmt.Errorf("container: %s already started", startParameter.ContainerId)
+		return "", fmt.Errorf("container: %s already started", containerId)
 
 	case "stopped":
 		// create container
-		if err := s.createContainer(startParameter.ContainerId, startParameter.Tty); err != nil {
+		if err := s.createContainer(containerId, startParameter.Tty); err != nil {
 			return "", fmt.Errorf("start container failed: %w", err)
 		}
 		// start container
-		if err := s.startContainer(startParameter.ContainerId, startParameter.Tty); err != nil {
+		if err := s.startContainer(containerId, startParameter.Tty); err != nil {
 			return "", fmt.Errorf("start container failed: %w", err)
 		}
 
@@ -567,7 +603,7 @@ func (s *ContainerService) Start(startParameter ServiceStartModel) (string, erro
 		return "", fmt.Errorf("start operation not allowed to current container status: %s", containerState)
 	}
 
-	return startParameter.ContainerId, nil
+	return containerId, nil
 }
 
 func (s *ContainerService) startContainer(containerId string, tty bool) error {
@@ -588,7 +624,13 @@ func (s *ContainerService) startContainer(containerId string, tty bool) error {
 
 // == service: delete ==
 func (s *ContainerService) Delete(deleteParameter ServiceDeleteModel) (string, error) {
-	containerState, err := s.getContainerState(deleteParameter.ContainerId)
+	// resolve container id
+	containerId, err := s.csmHandler.ResolveContainerId(deleteParameter.ContainerId)
+	if err != nil {
+		return "", fmt.Errorf("container: %s not found", deleteParameter.ContainerId)
+	}
+
+	containerState, err := s.getContainerState(containerId)
 	if err != nil {
 		return "", err
 	}
@@ -596,34 +638,34 @@ func (s *ContainerService) Delete(deleteParameter ServiceDeleteModel) (string, e
 	switch containerState {
 	case "creating", "created", "stopped":
 		// 1. delete container
-		if err := s.deleteContainer(deleteParameter.ContainerId); err != nil {
+		if err := s.deleteContainer(containerId); err != nil {
 			return "", fmt.Errorf("delete container failed: %w", err)
 		}
 
 		// 2. cleanup forward rule
-		if err := s.cleanupForwardRules(deleteParameter.ContainerId); err != nil {
+		if err := s.cleanupForwardRules(containerId); err != nil {
 			return "", fmt.Errorf("cleanup forward rule failed: %w", err)
 		}
 
 		// 2. release address
-		if err := s.releaseAddress(deleteParameter.ContainerId); err != nil {
+		if err := s.releaseAddress(containerId); err != nil {
 			return "", fmt.Errorf("release address failed: %w", err)
 		}
 
 		// 3. delete container directory
-		if err := s.deleteContainerDirectory(deleteParameter.ContainerId); err != nil {
+		if err := s.deleteContainerDirectory(containerId); err != nil {
 			return "", fmt.Errorf("delete container directory failed: %w", err)
 		}
 
 		// 4. delete cgroup subtree
-		if err := s.deleteCgroupSubtree(deleteParameter.ContainerId); err != nil {
+		if err := s.deleteCgroupSubtree(containerId); err != nil {
 			return "", fmt.Errorf("delete cgroup subtree failed: %w", err)
 		}
 	default:
 		return "", fmt.Errorf("delete operation not allowed to current container status: %s", containerState)
 	}
 
-	return deleteParameter.ContainerId, nil
+	return containerId, nil
 }
 
 func (s *ContainerService) deleteContainer(containerId string) error {
@@ -692,7 +734,13 @@ func (s *ContainerService) deleteCgroupSubtree(containerId string) error {
 
 // == service: stop ==
 func (s *ContainerService) Stop(stopParameter ServiceStopModel) (string, error) {
-	containerState, err := s.getContainerState(stopParameter.ContainerId)
+	// resolve container id
+	containerId, err := s.csmHandler.ResolveContainerId(stopParameter.ContainerId)
+	if err != nil {
+		return "", fmt.Errorf("container: %s not found", stopParameter.ContainerId)
+	}
+
+	containerState, err := s.getContainerState(containerId)
 	if err != nil {
 		return "", err
 	}
@@ -700,13 +748,13 @@ func (s *ContainerService) Stop(stopParameter ServiceStopModel) (string, error) 
 	switch containerState {
 	case "running":
 		// stop container
-		if err := s.stopContainer(stopParameter.ContainerId); err != nil {
+		if err := s.stopContainer(containerId); err != nil {
 			return "", fmt.Errorf("stop failed: %w", err)
 		}
 	default:
 		return "", fmt.Errorf("stop operation not allowed to current container status: %s", containerState)
 	}
-	return stopParameter.ContainerId, nil
+	return containerId, nil
 }
 
 func (s *ContainerService) stopContainer(containerId string) error {
@@ -725,10 +773,16 @@ func (s *ContainerService) stopContainer(containerId string) error {
 
 // == service: exec container ==
 func (s *ContainerService) Exec(execParameter ServiceExecModel) error {
+	// resolve container id
+	containerId, err := s.csmHandler.ResolveContainerId(execParameter.ContainerId)
+	if err != nil {
+		return fmt.Errorf("container: %s not found", execParameter.ContainerId)
+	}
+
 	// runtime: exec
 	if err := s.runtimeHandler.Exec(
 		runtime.ExecModel{
-			ContainerId: execParameter.ContainerId,
+			ContainerId: containerId,
 			Tty:         execParameter.Tty,
 			Entrypoint:  execParameter.Entrypoint,
 		},
@@ -775,6 +829,7 @@ func (s *ContainerService) GetContainerList() ([]ContainerState, error) {
 
 		containerStateList = append(containerStateList, ContainerState{
 			ContainerId: c.ContainerId,
+			Name:        c.ContainerName,
 			State:       c.State,
 			Pid:         c.Pid,
 			Repository:  c.Repository,

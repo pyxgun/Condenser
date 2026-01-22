@@ -11,6 +11,7 @@ type ServiceCreateModel struct {
 	Mount   []string
 	Network string
 	Tty     bool
+	Name    string
 }
 
 type ServiceStartModel struct {
@@ -40,6 +41,7 @@ type ForwardInfo struct {
 
 type ContainerState struct {
 	ContainerId string   `json:"containerId"`
+	Name        string   `json:"name"`
 	State       string   `json:"state"`
 	Pid         int      `json:"pid"`
 	Repository  string   `json:"imageRepository"`
