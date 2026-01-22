@@ -18,7 +18,7 @@ type DropletHandler struct {
 	commandFactory utils.CommandFactory
 }
 
-const runtimePath = "/bin/droplet"
+const runtimePath = "droplet"
 
 func (h *DropletHandler) Spec(specParameter runtime.SpecModel) error {
 	args := []string{

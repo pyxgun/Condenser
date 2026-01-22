@@ -1,7 +1,8 @@
 package websocket
 
 import (
-	"condenser/internal/env"
+	"condenser/internal/store/csm"
+	"condenser/internal/utils"
 	"context"
 	"errors"
 	"fmt"
@@ -22,19 +23,21 @@ import (
 func NewRequestHandler() *Handler {
 	return &Handler{
 		Resolver: StaticResolver{
-			ContainerRoot: env.ContainerRootDir,
+			ContainerRoot: utils.ContainerRootDir,
 			SockName:      "tty.sock",
 		},
-		Upgrader: websocket.Upgrader{},
+		Upgrader:   websocket.Upgrader{},
+		csmHandler: csm.NewCsmManager(csm.NewCsmStore(utils.CsmStorePath)),
 	}
 }
 
 func NewExecRequestHandler() *Handler {
 	return &Handler{
 		Resolver: StaticResolver{
-			ContainerRoot: env.ContainerRootDir,
+			ContainerRoot: utils.ContainerRootDir,
 			SockName:      "exec_tty.sock",
 		},
+		csmHandler: csm.NewCsmManager(csm.NewCsmStore(utils.CsmStorePath)),
 	}
 }
 
@@ -57,8 +60,9 @@ func (r StaticResolver) ConsoleSockPath(containerId string) (string, error) {
 }
 
 type Handler struct {
-	Resolver SockResolver
-	Upgrader websocket.Upgrader
+	Resolver   SockResolver
+	Upgrader   websocket.Upgrader
+	csmHandler csm.CsmHandler
 }
 
 // ServeHTTP handles GET /containers/{id}/attach (WebSocket)
@@ -66,6 +70,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	containerId := chi.URLParam(r, "containerId")
 	if containerId == "" {
 		http.Error(w, "missing container id", http.StatusBadRequest)
+		return
+	}
+	containerId, err := h.csmHandler.ResolveContainerId(containerId)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("container: %s not found", containerId), http.StatusBadRequest)
 		return
 	}
 

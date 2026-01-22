@@ -38,6 +38,7 @@ func (m *IpamManager) Allocate(containerId string, bridge string) (string, error
 				ipStr := next.String()
 				p.Allocations[ipStr] = Allocation{
 					ContainerId: containerId,
+					Interface:   "rd_" + containerId,
 					AssignedAt:  time.Now(),
 				}
 				allocated = ipStr

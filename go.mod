@@ -10,6 +10,7 @@ require (
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/swaggo/http-swagger/v2 v2.0.2
 	github.com/swaggo/swag v1.16.6
+	golang.org/x/sys v0.20.0
 )
 
 require (

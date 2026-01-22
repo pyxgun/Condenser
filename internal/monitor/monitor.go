@@ -1,8 +1,8 @@
 package monitor
 
 import (
-	"condenser/internal/env"
 	"condenser/internal/store/csm"
+	"condenser/internal/utils"
 	"log"
 	"syscall"
 	"time"
@@ -10,7 +10,7 @@ import (
 
 func NewContainerMonitor() *ContainerMonitor {
 	return &ContainerMonitor{
-		csmHandler: csm.NewCsmManager(csm.NewCsmStore(env.CsmStorePath)),
+		csmHandler: csm.NewCsmManager(csm.NewCsmStore(utils.CsmStorePath)),
 	}
 }
 
@@ -20,7 +20,7 @@ type ContainerMonitor struct {
 
 func (m *ContainerMonitor) Start() error {
 	for {
-		time.Sleep(1 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 
 		// get container list
 		containerList, _ := m.csmHandler.GetContainerList()

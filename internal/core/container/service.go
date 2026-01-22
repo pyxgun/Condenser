@@ -3,7 +3,6 @@ package container
 import (
 	"condenser/internal/core/image"
 	"condenser/internal/core/network"
-	"condenser/internal/env"
 	"condenser/internal/runtime"
 	"condenser/internal/runtime/droplet"
 	"condenser/internal/store/csm"
@@ -26,9 +25,9 @@ func NewContaierService() *ContainerService {
 		commandFactory:    utils.NewCommandFactory(),
 		runtimeHandler:    droplet.NewDropletHandler(),
 
-		ipamHandler: ipam.NewIpamManager(ipam.NewIpamStore(env.IpamStorePath)),
-		ilmHandler:  ilm.NewIlmManager(ilm.NewIlmStore(env.IlmStorePath)),
-		csmHandler:  csm.NewCsmManager(csm.NewCsmStore(env.CsmStorePath)),
+		ipamHandler: ipam.NewIpamManager(ipam.NewIpamStore(utils.IpamStorePath)),
+		ilmHandler:  ilm.NewIlmManager(ilm.NewIlmStore(utils.IlmStorePath)),
+		csmHandler:  csm.NewCsmManager(csm.NewCsmStore(utils.CsmStorePath)),
 
 		imageServiceHandler:   image.NewImageService(),
 		networkServiceHandler: network.NewNetworkService(),
@@ -49,12 +48,32 @@ type ContainerService struct {
 }
 
 // == service: create ==
-func (s *ContainerService) Create(createParameter ServiceCreateModel) (string, error) {
+func (s *ContainerService) Create(createParameter ServiceCreateModel) (id string, err error) {
+	// 1. generate container id and name
+	containerId := utils.NewUlid()
+	//    if name is not set, generate a random name
+	containerName := createParameter.Name
+	if containerName == "" {
+		containerName, err = s.generateContainerName()
+		if err != nil {
+			return "", err
+		}
+	} else {
+		// validate the name is not used by other container
+		if s.csmHandler.IsNameAlreadyUsed(containerName) {
+			return "", fmt.Errorf("name: %s already used by other container", containerName)
+		}
+	}
+
 	// RollbackFlag for handling rollback handling when process is not completed successfuly
 	var rollbackFlag RollbackFlag
-
-	// 1. generate container id
-	containerId := utils.NewUlid()
+	defer func() {
+		if err != nil {
+			if rbErr := s.rollback(rollbackFlag, containerId); rbErr != nil {
+				err = rbErr
+			}
+		}
+	}()
 
 	// 2. check if the requested image exist
 	imageRepo, imageRef, err := s.parseImageRef(createParameter.Image)
@@ -98,33 +117,24 @@ func (s *ContainerService) Create(createParameter ServiceCreateModel) (string, e
 	} else {
 		command = slices.Concat(imageConfig.Config.Entrypoint, imageConfig.Config.Cmd)
 	}
-	if err := s.csmHandler.StoreContainer(containerId, "creating", 0, imageRepo, imageRef, command); err != nil {
+	if err := s.csmHandler.StoreContainer(containerId, "creating", 0, imageRepo, imageRef, command, containerName); err != nil {
 		return "", err
 	}
 	rollbackFlag.CSMEntry = true
 
 	// 7. setup container directory
 	if err := s.setupContainerDirectory(containerId); err != nil {
-		if err := s.rollback(rollbackFlag, containerId); err != nil {
-			return "", fmt.Errorf("rollback failed: %w", err)
-		}
 		return "", fmt.Errorf("create container directory failed: %w", err)
 	}
 	rollbackFlag.DirectoryEnv = true
 
 	// 8. setup etc files
-	if err := s.setupEtcFiles(containerId); err != nil {
-		if err := s.rollback(rollbackFlag, containerId); err != nil {
-			return "", fmt.Errorf("rollback failed: %w", err)
-		}
+	if err := s.setupEtcFiles(containerId, containerAddr); err != nil {
 		return "", fmt.Errorf("setup etc files failed: %w", err)
 	}
 
 	// 9. setup cgroup subtree
 	if err := s.setupCgroupSubtree(containerId); err != nil {
-		if err := s.rollback(rollbackFlag, containerId); err != nil {
-			return "", fmt.Errorf("rollback failed: %w", err)
-		}
 		return "", fmt.Errorf("setup cgroup subtree failed: %w", err)
 	}
 	rollbackFlag.CgroupEntry = true
@@ -134,26 +144,17 @@ func (s *ContainerService) Create(createParameter ServiceCreateModel) (string, e
 		containerId, createParameter, imageRepo, imageRef, imageConfig,
 		bridgeInterface, containerAddr, containerGateway,
 	); err != nil {
-		if err := s.rollback(rollbackFlag, containerId); err != nil {
-			return "", fmt.Errorf("rollback failed: %w", err)
-		}
 		return "", fmt.Errorf("create spec failed: %w", err)
 	}
 
 	// 11. setup forward rule
 	if err := s.setupForwardRule(containerId, createParameter.Port); err != nil {
-		if err := s.rollback(rollbackFlag, containerId); err != nil {
-			return "", fmt.Errorf("rollback failed: %w", err)
-		}
 		return "", fmt.Errorf("forward rule failed: %w", err)
 	}
 	rollbackFlag.ForwardRule = true
 
 	// 12. create container
 	if err := s.createContainer(containerId, createParameter.Tty); err != nil {
-		if err := s.rollback(rollbackFlag, containerId); err != nil {
-			return "", fmt.Errorf("rollback failed: %w", err)
-		}
 		return "", fmt.Errorf("create container failed: %w", err)
 	}
 
@@ -197,6 +198,23 @@ func (s *ContainerService) rollback(rollbackFlag RollbackFlag, containerId strin
 	return nil
 }
 
+func (s *ContainerService) generateContainerName() (string, error) {
+	genCount := 0
+	for {
+		randName, err := utils.GenerateRandName()
+		if err != nil {
+			return "", err
+		}
+		if !s.csmHandler.IsNameAlreadyUsed(randName) {
+			return randName, nil
+		}
+		if genCount >= 10 {
+			return "", fmt.Errorf("cannot assign random name")
+		}
+		genCount++
+	}
+}
+
 func (s *ContainerService) pullImage(targetImage string, os string, arch string) error {
 	var (
 		targetOs   string
@@ -223,13 +241,14 @@ func (s *ContainerService) pullImage(targetImage string, os string, arch string)
 }
 
 func (s *ContainerService) setupContainerDirectory(containerId string) error {
-	containerDir := filepath.Join(env.ContainerRootDir, containerId)
+	containerDir := filepath.Join(utils.ContainerRootDir, containerId)
 	dirs := []string{
 		containerDir,
 		filepath.Join(containerDir, "diff"),
 		filepath.Join(containerDir, "work"),
 		filepath.Join(containerDir, "merged"),
 		filepath.Join(containerDir, "etc"),
+		filepath.Join(containerDir, "logs"),
 	}
 	for _, dir := range dirs {
 		if err := s.filesystemHandler.MkdirAll(dir, 0o755); err != nil {
@@ -239,12 +258,12 @@ func (s *ContainerService) setupContainerDirectory(containerId string) error {
 	return nil
 }
 
-func (s *ContainerService) setupEtcFiles(containerId string) error {
-	etcDir := filepath.Join(env.ContainerRootDir, containerId, "etc")
+func (s *ContainerService) setupEtcFiles(containerId string, containerAddr string) error {
+	etcDir := filepath.Join(utils.ContainerRootDir, containerId, "etc")
 
 	// /etc/hosts
 	hostsPath := filepath.Join(etcDir, "hosts")
-	hostsData := "127.0.0.1 localhost\n"
+	hostsData := fmt.Sprintf("127.0.0.1 localhost\n%s %s\n", strings.SplitN(containerAddr, "/", 2)[0], containerId)
 	if err := s.filesystemHandler.WriteFile(hostsPath, []byte(hostsData), 0o644); err != nil {
 		return err
 	}
@@ -267,7 +286,7 @@ func (s *ContainerService) setupEtcFiles(containerId string) error {
 }
 
 func (s *ContainerService) setupCgroupSubtree(containerId string) error {
-	cgroupPath := filepath.Join(env.CgroupRuntimeDir, containerId)
+	cgroupPath := filepath.Join(utils.CgroupRuntimeDir, containerId)
 
 	if err := s.filesystemHandler.MkdirAll(cgroupPath, 0o755); err != nil {
 		return err
@@ -276,7 +295,7 @@ func (s *ContainerService) setupCgroupSubtree(containerId string) error {
 }
 
 func (s *ContainerService) ChangeCgroupMode(containerId string) error {
-	cgroupPath := filepath.Join(env.CgroupRuntimeDir, containerId)
+	cgroupPath := filepath.Join(utils.CgroupRuntimeDir, containerId)
 
 	if err := s.filesystemHandler.Chmod(cgroupPath, 0o555); err != nil {
 		return err
@@ -308,7 +327,7 @@ func (s *ContainerService) createContainerSpec(
 
 	// spec parametr
 	// rootfs
-	rootfs := filepath.Join(env.ContainerRootDir, containerId, "merged")
+	rootfs := filepath.Join(utils.ContainerRootDir, containerId, "merged")
 
 	// cwd
 	cwd := imageConfig.Config.WorkingDir
@@ -343,16 +362,16 @@ func (s *ContainerService) createContainerSpec(
 	}
 
 	// container interface
-	containerInterface := "eth0"
+	containerInterface := "rd_" + containerId
 	containerDns := []string{"8.8.8.8"}
 
 	imageLayer, err := s.ilmHandler.GetRootfsPath(imageRepo, imageRef)
 	if err != nil {
 		return err
 	}
-	upperDir := filepath.Join(env.ContainerRootDir, containerId, "diff")
-	workDir := filepath.Join(env.ContainerRootDir, containerId, "work")
-	outputDir := filepath.Join(env.ContainerRootDir, containerId)
+	upperDir := filepath.Join(utils.ContainerRootDir, containerId, "diff")
+	workDir := filepath.Join(utils.ContainerRootDir, containerId, "work")
+	outputDir := filepath.Join(utils.ContainerRootDir, containerId)
 
 	// hook
 	hookAddr, err := s.ipamHandler.GetDefaultInterfaceAddr()
@@ -548,7 +567,13 @@ func (s *ContainerService) getContainerState(containerId string) (string, error)
 
 // == service: start ==
 func (s *ContainerService) Start(startParameter ServiceStartModel) (string, error) {
-	containerState, err := s.getContainerState(startParameter.ContainerId)
+	// resolve container id
+	containerId, err := s.csmHandler.ResolveContainerId(startParameter.ContainerId)
+	if err != nil {
+		return "", fmt.Errorf("container: %s not found", startParameter.ContainerId)
+	}
+
+	containerState, err := s.getContainerState(containerId)
 	if err != nil {
 		return "", err
 	}
@@ -556,21 +581,21 @@ func (s *ContainerService) Start(startParameter ServiceStartModel) (string, erro
 	switch containerState {
 	case "created":
 		// start container
-		if err := s.startContainer(startParameter.ContainerId, startParameter.Tty); err != nil {
+		if err := s.startContainer(containerId, startParameter.Tty); err != nil {
 			return "", fmt.Errorf("start container failed: %w", err)
 		}
 
 	case "running":
 		// already started. ignore operation
-		return "", fmt.Errorf("container: %s already started", startParameter.ContainerId)
+		return "", fmt.Errorf("container: %s already started", containerId)
 
 	case "stopped":
 		// create container
-		if err := s.createContainer(startParameter.ContainerId, startParameter.Tty); err != nil {
+		if err := s.createContainer(containerId, startParameter.Tty); err != nil {
 			return "", fmt.Errorf("start container failed: %w", err)
 		}
 		// start container
-		if err := s.startContainer(startParameter.ContainerId, startParameter.Tty); err != nil {
+		if err := s.startContainer(containerId, startParameter.Tty); err != nil {
 			return "", fmt.Errorf("start container failed: %w", err)
 		}
 
@@ -578,7 +603,7 @@ func (s *ContainerService) Start(startParameter ServiceStartModel) (string, erro
 		return "", fmt.Errorf("start operation not allowed to current container status: %s", containerState)
 	}
 
-	return startParameter.ContainerId, nil
+	return containerId, nil
 }
 
 func (s *ContainerService) startContainer(containerId string, tty bool) error {
@@ -599,7 +624,13 @@ func (s *ContainerService) startContainer(containerId string, tty bool) error {
 
 // == service: delete ==
 func (s *ContainerService) Delete(deleteParameter ServiceDeleteModel) (string, error) {
-	containerState, err := s.getContainerState(deleteParameter.ContainerId)
+	// resolve container id
+	containerId, err := s.csmHandler.ResolveContainerId(deleteParameter.ContainerId)
+	if err != nil {
+		return "", fmt.Errorf("container: %s not found", deleteParameter.ContainerId)
+	}
+
+	containerState, err := s.getContainerState(containerId)
 	if err != nil {
 		return "", err
 	}
@@ -607,34 +638,34 @@ func (s *ContainerService) Delete(deleteParameter ServiceDeleteModel) (string, e
 	switch containerState {
 	case "creating", "created", "stopped":
 		// 1. delete container
-		if err := s.deleteContainer(deleteParameter.ContainerId); err != nil {
+		if err := s.deleteContainer(containerId); err != nil {
 			return "", fmt.Errorf("delete container failed: %w", err)
 		}
 
 		// 2. cleanup forward rule
-		if err := s.cleanupForwardRules(deleteParameter.ContainerId); err != nil {
+		if err := s.cleanupForwardRules(containerId); err != nil {
 			return "", fmt.Errorf("cleanup forward rule failed: %w", err)
 		}
 
 		// 2. release address
-		if err := s.releaseAddress(deleteParameter.ContainerId); err != nil {
+		if err := s.releaseAddress(containerId); err != nil {
 			return "", fmt.Errorf("release address failed: %w", err)
 		}
 
 		// 3. delete container directory
-		if err := s.deleteContainerDirectory(deleteParameter.ContainerId); err != nil {
+		if err := s.deleteContainerDirectory(containerId); err != nil {
 			return "", fmt.Errorf("delete container directory failed: %w", err)
 		}
 
 		// 4. delete cgroup subtree
-		if err := s.deleteCgroupSubtree(deleteParameter.ContainerId); err != nil {
+		if err := s.deleteCgroupSubtree(containerId); err != nil {
 			return "", fmt.Errorf("delete cgroup subtree failed: %w", err)
 		}
 	default:
 		return "", fmt.Errorf("delete operation not allowed to current container status: %s", containerState)
 	}
 
-	return deleteParameter.ContainerId, nil
+	return containerId, nil
 }
 
 func (s *ContainerService) deleteContainer(containerId string) error {
@@ -684,7 +715,7 @@ func (s *ContainerService) releaseAddress(containerId string) error {
 }
 
 func (s *ContainerService) deleteContainerDirectory(containerId string) error {
-	containerDir := filepath.Join(env.ContainerRootDir, containerId)
+	containerDir := filepath.Join(utils.ContainerRootDir, containerId)
 	if err := s.filesystemHandler.RemoveAll(containerDir); err != nil {
 		return err
 	}
@@ -692,7 +723,7 @@ func (s *ContainerService) deleteContainerDirectory(containerId string) error {
 }
 
 func (s *ContainerService) deleteCgroupSubtree(containerId string) error {
-	cgroupPath := filepath.Join(env.CgroupRuntimeDir, containerId)
+	cgroupPath := filepath.Join(utils.CgroupRuntimeDir, containerId)
 	if err := s.filesystemHandler.Remove(cgroupPath); err != nil {
 		return err
 	}
@@ -703,7 +734,13 @@ func (s *ContainerService) deleteCgroupSubtree(containerId string) error {
 
 // == service: stop ==
 func (s *ContainerService) Stop(stopParameter ServiceStopModel) (string, error) {
-	containerState, err := s.getContainerState(stopParameter.ContainerId)
+	// resolve container id
+	containerId, err := s.csmHandler.ResolveContainerId(stopParameter.ContainerId)
+	if err != nil {
+		return "", fmt.Errorf("container: %s not found", stopParameter.ContainerId)
+	}
+
+	containerState, err := s.getContainerState(containerId)
 	if err != nil {
 		return "", err
 	}
@@ -711,13 +748,13 @@ func (s *ContainerService) Stop(stopParameter ServiceStopModel) (string, error) 
 	switch containerState {
 	case "running":
 		// stop container
-		if err := s.stopContainer(stopParameter.ContainerId); err != nil {
+		if err := s.stopContainer(containerId); err != nil {
 			return "", fmt.Errorf("stop failed: %w", err)
 		}
 	default:
 		return "", fmt.Errorf("stop operation not allowed to current container status: %s", containerState)
 	}
-	return stopParameter.ContainerId, nil
+	return containerId, nil
 }
 
 func (s *ContainerService) stopContainer(containerId string) error {
@@ -736,10 +773,16 @@ func (s *ContainerService) stopContainer(containerId string) error {
 
 // == service: exec container ==
 func (s *ContainerService) Exec(execParameter ServiceExecModel) error {
+	// resolve container id
+	containerId, err := s.csmHandler.ResolveContainerId(execParameter.ContainerId)
+	if err != nil {
+		return fmt.Errorf("container: %s not found", execParameter.ContainerId)
+	}
+
 	// runtime: exec
 	if err := s.runtimeHandler.Exec(
 		runtime.ExecModel{
-			ContainerId: execParameter.ContainerId,
+			ContainerId: containerId,
 			Tty:         execParameter.Tty,
 			Entrypoint:  execParameter.Entrypoint,
 		},
@@ -786,6 +829,7 @@ func (s *ContainerService) GetContainerList() ([]ContainerState, error) {
 
 		containerStateList = append(containerStateList, ContainerState{
 			ContainerId: c.ContainerId,
+			Name:        c.ContainerName,
 			State:       c.State,
 			Pid:         c.Pid,
 			Repository:  c.Repository,

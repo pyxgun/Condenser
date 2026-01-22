@@ -2,14 +2,14 @@ package hook
 
 import (
 	"condenser/internal/core/container"
-	"condenser/internal/env"
 	"condenser/internal/store/csm"
+	"condenser/internal/utils"
 	"fmt"
 )
 
 func NewHookService() *HookService {
 	return &HookService{
-		csmHandler:    csm.NewCsmManager(csm.NewCsmStore(env.CsmStorePath)),
+		csmHandler:    csm.NewCsmManager(csm.NewCsmStore(utils.CsmStorePath)),
 		cgroupHandler: container.NewContaierService(),
 	}
 }

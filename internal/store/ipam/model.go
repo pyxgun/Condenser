@@ -12,6 +12,7 @@ type ForwardInfo struct {
 
 type Allocation struct {
 	ContainerId string        `json:"containerId"`
+	Interface   string        `json:"interface"`
 	Forwards    []ForwardInfo `json:"forwards"`
 	AssignedAt  time.Time     `json:"assignedAt"`
 }

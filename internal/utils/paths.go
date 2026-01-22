@@ -1,7 +1,8 @@
-package env
+package utils
 
 const (
 	RootDir          = "/etc/raind"
+	AuditLogDir      = "/etc/raind/log/"
 	ContainerRootDir = "/etc/raind/container"
 	ImageRootDir     = "/etc/raind/image"
 	LayerRootDir     = "/etc/raind/image/layers"

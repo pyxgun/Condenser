@@ -1,7 +1,6 @@
 package image
 
 import (
-	"condenser/internal/env"
 	"condenser/internal/registry"
 	"condenser/internal/registry/dockerhub"
 	"condenser/internal/store/ilm"
@@ -15,7 +14,7 @@ func NewImageService() *ImageService {
 	return &ImageService{
 		filesystemHandler: utils.NewFilesystemExecutor(),
 		registryHandler:   dockerhub.NewRegistryDockerHub(),
-		ilmHandler:        ilm.NewIlmManager(ilm.NewIlmStore(env.IlmStorePath)),
+		ilmHandler:        ilm.NewIlmManager(ilm.NewIlmStore(utils.IlmStorePath)),
 	}
 }
 
