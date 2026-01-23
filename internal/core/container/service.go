@@ -50,7 +50,7 @@ type ContainerService struct {
 // == service: create ==
 func (s *ContainerService) Create(createParameter ServiceCreateModel) (id string, err error) {
 	// 1. generate container id and name
-	containerId := utils.NewUlid()
+	containerId := utils.NewUlid()[:12]
 	//    if name is not set, generate a random name
 	containerName := createParameter.Name
 	if containerName == "" {

@@ -11,6 +11,7 @@ const (
 	IpamStorePath = "/etc/raind/store/ipam.json"
 	CsmStorePath  = "/etc/raind/store/csm.json"
 	IlmStorePath  = "/etc/raind/store/ilm.json"
+	NpmStorePath  = "/etc/raind/store/npm.json"
 
 	CgroupRuntimeDir         = "/sys/fs/cgroup/raind"
 	CgroupSubtreeControlPath = "/sys/fs/cgroup/raind/cgroup.subtree_control"

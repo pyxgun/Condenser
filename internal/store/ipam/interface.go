@@ -17,4 +17,5 @@ type IpamHandler interface {
 	GetForwardInfo(containerId string) ([]ForwardInfo, error)
 	GetPoolList() ([]Pool, error)
 	GetNetworkInfoById(containerId string) (string, Allocation, error)
+	GetVethById(containerId string) (string, error)
 }
