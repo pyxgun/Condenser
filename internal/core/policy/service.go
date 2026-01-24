@@ -6,7 +6,6 @@ import (
 	"condenser/internal/store/npm"
 	"condenser/internal/utils"
 	"fmt"
-	"log"
 )
 
 func NewwServicePolicy() *ServicePolicy {
@@ -614,7 +613,6 @@ func (s *ServicePolicy) insertRaindEWUserPolicy(policies []npm.Policy) error {
 
 func (s *ServicePolicy) insertRaindNSUserPolicy(chainName string, policies []npm.Policy) error {
 	for _, p := range policies {
-		log.Println(p)
 		// check remove flag
 		//   if status is "remove_next_commit", remove policy from store and not apply the policy
 		if p.Status == "remove_next_commit" {
