@@ -2,26 +2,34 @@ package env
 
 import (
 	"bufio"
+	"condenser/internal/cert"
 	"condenser/internal/core/network"
+	"condenser/internal/core/policy"
 	"condenser/internal/lsm"
 	"condenser/internal/store/csm"
 	"condenser/internal/store/ilm"
 	"condenser/internal/store/ipam"
+	"condenser/internal/store/npm"
 	"condenser/internal/utils"
 	"fmt"
+	"net"
 	"os"
 	"strings"
+	"time"
 )
 
 func NewBootstrapManager() *BootstrapManager {
 	return &BootstrapManager{
 		filesystemHandler: utils.NewFilesystemExecutor(),
 		commandFactory:    utils.NewCommandFactory(),
+		certHandler:       cert.NewCertManager(),
 		networkHandler:    network.NewNetworkService(),
+		policyHandler:     policy.NewwServicePolicy(),
 		ipamStoreHandler:  ipam.NewIpamStore(utils.IpamStorePath),
 		ipamHandler:       ipam.NewIpamManager(ipam.NewIpamStore(utils.IpamStorePath)),
 		csmStoreHandler:   csm.NewCsmStore(utils.CsmStorePath),
 		ilmStoreHandler:   ilm.NewIlmStore(utils.IlmStorePath),
+		npmStoreHandler:   npm.NewNpmStore(utils.NpmStorePath),
 		appArmorHandler:   lsm.NewAppArmorManager(),
 	}
 }
@@ -29,11 +37,14 @@ func NewBootstrapManager() *BootstrapManager {
 type BootstrapManager struct {
 	filesystemHandler utils.FilesystemHandler
 	commandFactory    utils.CommandFactory
+	certHandler       cert.CertHandler
 	networkHandler    network.NetworkServiceHandler
+	policyHandler     policy.PolicyServiceHandler
 	ipamStoreHandler  ipam.IpamStoreHandler
 	ipamHandler       ipam.IpamHandler
 	csmStoreHandler   csm.CsmStoreHandler
 	ilmStoreHandler   ilm.IlmStoreHandler
+	npmStoreHandler   npm.NpmStoreHandler
 	appArmorHandler   lsm.AppArmorHandler
 }
 
@@ -48,18 +59,28 @@ func (m *BootstrapManager) SetupRuntime() error {
 		return err
 	}
 
-	// 3. setup IPAM (IP Address Managemant)
+	// 3. setup IPAM (IP Address Managr)
 	if err := m.setupIpam(); err != nil {
 		return err
 	}
 
-	// 4. setup CSM (Container State Management)
+	// 4. setup CSM (Container State Manager)
 	if err := m.setupCsm(); err != nil {
 		return err
 	}
 
-	// 5. setup ILM (Image Layer Management)
+	// 5. setup ILM (Image Layer Manager)
 	if err := m.setupIlm(); err != nil {
+		return err
+	}
+
+	// 6. setup NPM (Network Policy Manager)
+	if err := m.setupNpm(); err != nil {
+		return err
+	}
+
+	// 7. setup certificate
+	if err := m.setupCertificate(); err != nil {
 		return err
 	}
 
@@ -68,8 +89,8 @@ func (m *BootstrapManager) SetupRuntime() error {
 		return err
 	}
 
-	// 7. setup network chain
-	if err := m.setupNetworkChain(); err != nil {
+	// 7. setup network policy
+	if err := m.setupPolicy(); err != nil {
 		return err
 	}
 
@@ -88,6 +109,7 @@ func (m *BootstrapManager) setupRuntimeDirectory() error {
 		utils.LayerRootDir,
 		utils.StoreDir,
 		utils.AuditLogDir,
+		utils.CertDir,
 	}
 	for _, dir := range dirs {
 		if err := m.filesystemHandler.MkdirAll(dir, 0o644); err != nil {
@@ -192,6 +214,10 @@ func (m *BootstrapManager) setupIlm() error {
 	return m.ilmStoreHandler.SetConfig()
 }
 
+func (m *BootstrapManager) setupNpm() error {
+	return m.npmStoreHandler.SetNetworkPolicy()
+}
+
 func (m *BootstrapManager) setupAppArmor() error {
 	if err := m.appArmorHandler.EnsureRaindDefaultProfile(); err != nil {
 		// if apparmor setting failed, runtime ignore apparmor setting
@@ -294,286 +320,71 @@ func (m *BootstrapManager) createManagementProtectRule() error {
 	return nil
 }
 
-func (m *BootstrapManager) setupNetworkChain() error {
-	// raind default chains
-	// 1. RAIND-ROOT
-	//      manage all Raind Rules
-	// 2. RAIND-EW
-	//      manage East-West(contaier-to-container) traffic rules
-	// 3. RAIND-NS-OBS
-	//      manage North-West(container-to-external) traffic rules
-	//      this chain is all accept and log traffic default
-	// 4. RAIND-NS-ENF
-	//      manage North-West(container-to-external) traffic rules
-	//      this chain is all denay and allow explicit
+func (m *BootstrapManager) setupPolicy() error {
+	// 1. setup predefined policy
+	if err := m.policyHandler.BuildPredefinedPolicy(); err != nil {
+		return err
+	}
+	// 2. setup user defined policy
+	if err := m.policyHandler.BuildUserPolicy(); err != nil {
+		return err
+	}
+	return nil
+}
 
-	// == setup predefined rules ==//
-	networkList, err := m.ipamHandler.GetNetworkList()
+func (m *BootstrapManager) setupCertificate() error {
+	// 1. server cert
+	hostaddr, err := m.ipamHandler.GetDefaultInterfaceAddr()
 	if err != nil {
 		return err
 	}
+	hostaddr = strings.SplitN(hostaddr, "/", 2)[0]
 
-	// TODO: implement Observe/Enforce mode
-	enforce := false
-	// TODO: implement Nflog mode
-	nflog := true
-
-	// 1. create chain
-	if err := m.createChain(); err != nil {
-		return err
-	}
-
-	// 2. insert chain to forward
-	if err := m.insertForward(); err != nil {
-		return err
-	}
-
-	// 3. build RAIND-ROOT chain
-	if err := m.buildRaindRootChain(enforce); err != nil {
-		return err
-	}
-
-	// 4. build RAIND-EW chain
-	if err := m.buildRaindEWChain(networkList, nflog); err != nil {
-		return err
-	}
-
-	// 5. build RAIND-NS-OBS chain
-	if err := m.buildRaindNSObserveChain(networkList, nflog); err != nil {
-		return err
-	}
-
-	// 6. build RAIND-NS-ENF chain
-	if err := m.buildRaindNSEnforceChain(networkList, nflog); err != nil {
-		return err
-	}
-
-	// == setup user-defined rules ==
-
-	return nil
-}
-
-func (m *BootstrapManager) createChain() error {
-	chains := []string{
-		"RAIND-ROOT",
-		"RAIND-EW",
-		"RAIND-NS-OBS",
-		"RAIND-NS-ENF",
-	}
-	for _, c := range chains {
-		if err := m.networkHandler.CreateChain(c); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (m *BootstrapManager) insertForward() error {
-	if err := m.networkHandler.InsertForwardRule("RAIND-ROOT"); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (m *BootstrapManager) buildRaindRootChain(enforce bool) error {
-	chainName := "RAIND-ROOT"
-	// 1. allow return traffic (ESTABLISHED,RELATED)
-	if err := m.networkHandler.AddRuleToChain(
-		chainName,
-		network.RuleModel{
-			Conntrack: true,
-			Ctstate:   []string{"ESTABLISHED", "RELATED"},
+	err = m.certHandler.EnsureSelfSignedCert(
+		utils.PublicCertPath,
+		utils.PrivateKeyPath,
+		cert.CertConfig{
+			CommonName: "raind",
+			DNSNames: []string{
+				"localhost",
+			},
+			IPAddresses: []net.IP{
+				net.ParseIP("127.0.0.1"),
+				net.ParseIP(hostaddr),
+			},
+			ValidFor: 5 * 365 * 24 * time.Hour, // 5 years
 		},
-		"ACCEPT",
-	); err != nil {
-		return err
-	}
-
-	// 2. forward to RAIND-EW
-	if err := m.networkHandler.AddRuleToChain(
-		chainName,
-		network.RuleModel{},
-		"RAIND-EW",
-	); err != nil {
-		return err
-	}
-
-	if enforce {
-		// TODO: implement Observe/Enforce mode
-	} else {
-		// 3. forward  to RAIND-NS-OBS
-		if err := m.networkHandler.AddRuleToChain(
-			chainName,
-			network.RuleModel{},
-			"RAIND-NS-OBS",
-		); err != nil {
-			return err
-		}
-	}
-
-	// 4. other: return
-	if err := m.networkHandler.AddRuleToChain(
-		chainName,
-		network.RuleModel{},
-		"RETURN",
-	); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *BootstrapManager) buildRaindEWChain(networkList []ipam.NetworkList, nflog bool) error {
-	chainName := "RAIND-EW"
-
-	// 1. if NFLOG mode is enabled, add NFLOG entry
-	if nflog {
-		for _, n := range networkList {
-			if err := m.networkHandler.AddRuleToChain(
-				chainName,
-				network.RuleModel{
-					Conntrack:       true,
-					Ctstate:         []string{"NEW"},
-					Physdev:         true,
-					PhysdevIsBridge: true,
-					InputDev:        n.Interface,
-					OutputDev:       n.Interface,
-					NflogGroup:      10,
-					NflogPrefix:     "RAIND-EW-DENY",
-				},
-				"NFLOG",
-			); err != nil {
-				return err
-			}
-		}
-	}
-
-	// 2. deny all inter-container traffic
-	for _, n := range networkList {
-		if err := m.networkHandler.AddRuleToChain(
-			chainName,
-			network.RuleModel{
-				InputDev:  n.Interface,
-				OutputDev: n.Interface,
-			},
-			"DROP",
-		); err != nil {
-			return err
-		}
-	}
-
-	// 3. other: return
-	if err := m.networkHandler.AddRuleToChain(
-		chainName,
-		network.RuleModel{},
-		"RETURN",
-	); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *BootstrapManager) buildRaindNSObserveChain(networkList []ipam.NetworkList, nflog bool) error {
-	chainName := "RAIND-NS-OBS"
-	hostInterface, err := m.ipamHandler.GetDefaultInterface()
+	)
 	if err != nil {
 		return err
 	}
 
-	// 1. if NFLOG mode is enabled, add NFLOG entry
-	if nflog {
-		for _, n := range networkList {
-			if err := m.networkHandler.AddRuleToChain(
-				chainName,
-				network.RuleModel{
-					Conntrack:   true,
-					Ctstate:     []string{"NEW"},
-					InputDev:    n.Interface,
-					OutputDev:   hostInterface,
-					NflogGroup:  11,
-					NflogPrefix: "RAIND-NS-OBS",
-				},
-				"NFLOG",
-			); err != nil {
-				return err
-			}
-		}
-	}
-
-	// 2. allow container to external traffic
-	for _, n := range networkList {
-		if err := m.networkHandler.AddRuleToChain(
-			chainName,
-			network.RuleModel{
-				InputDev:  n.Interface,
-				OutputDev: hostInterface,
-			},
-			"ACCEPT",
-		); err != nil {
-			return err
-		}
-	}
-
-	// 3. other: return
-	if err := m.networkHandler.AddRuleToChain(
-		chainName,
-		network.RuleModel{},
-		"RETURN",
-	); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *BootstrapManager) buildRaindNSEnforceChain(networkList []ipam.NetworkList, nflog bool) error {
-	chainName := "RAIND-NS-ENF"
-	hostInterface, err := m.ipamHandler.GetDefaultInterface()
+	// 2. client CA
+	err = m.certHandler.EnsureClientCACert(
+		utils.ClientIssuerCACertPath,
+		utils.ClientIssuerCAKeyPath,
+		cert.CertConfig{
+			CommonName: "raind client issuer",
+			ValidFor:   5 * 365 * 24 * time.Hour, // 5 years
+		},
+	)
 	if err != nil {
 		return err
 	}
 
-	// 1. if NFLOG mode is enabled, add NFLOG entry
-	if nflog {
-		for _, n := range networkList {
-			if err := m.networkHandler.AddRuleToChain(
-				chainName,
-				network.RuleModel{
-					Conntrack:   true,
-					Ctstate:     []string{"NEW"},
-					InputDev:    n.Interface,
-					OutputDev:   hostInterface,
-					NflogGroup:  12,
-					NflogPrefix: "RAIND-NS-ENF",
-				},
-				"NFLOG",
-			); err != nil {
-				return err
-			}
-		}
-	}
-
-	// 2. allow container to external traffic
-	for _, n := range networkList {
-		if err := m.networkHandler.AddRuleToChain(
-			chainName,
-			network.RuleModel{
-				InputDev:  n.Interface,
-				OutputDev: hostInterface,
-			},
-			"DROP",
-		); err != nil {
-			return err
-		}
-	}
-
-	// 3. other: return
-	if err := m.networkHandler.AddRuleToChain(
-		chainName,
-		network.RuleModel{},
-		"RETURN",
-	); err != nil {
+	// 3. client cert
+	err = m.certHandler.IssueClientCert(
+		utils.ClientCertPath,
+		utils.ClientKeyPath,
+		utils.ClientIssuerCACertPath,
+		utils.ClientIssuerCAKeyPath,
+		cert.ClientCertConfig{
+			CommonName: "raind-client",
+			DNSNames:   []string{"raind-client"},
+			ValidFor:   1 * 365 * 24 * time.Hour, // 1 year
+		},
+	)
+	if err != nil {
 		return err
 	}
 

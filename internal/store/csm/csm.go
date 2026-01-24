@@ -156,3 +156,12 @@ func (m *CsmManager) ResolveContainerId(str string) (string, error) {
 	}
 	return containerId, nil
 }
+
+func (m *CsmManager) IsContainerExist(str string) bool {
+	_, getNameErr := m.GetContainerIdByName(str)
+	_, getIdErr := m.GetContainerNameById(str)
+	if getNameErr != nil && getIdErr != nil {
+		return false
+	}
+	return true
+}

@@ -309,6 +309,176 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/v1/policies": {
+            "get": {
+                "description": "get policy",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Policy"
+                ],
+                "summary": "get policy list",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Chain Name",
+                        "name": "chainName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Add new policy",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Policy"
+                ],
+                "summary": "Add policy",
+                "parameters": [
+                    {
+                        "description": "policy parameter",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/policy.AddPolicyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/policies/commit": {
+            "post": {
+                "description": "commit all policy",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Policy"
+                ],
+                "summary": "commit policy",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/policies/ns/mode": {
+            "post": {
+                "description": "change north-south mode",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Policy"
+                ],
+                "summary": "change north-south mode",
+                "parameters": [
+                    {
+                        "description": "mode",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/policy.ChangeNSModeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/policies/revert": {
+            "post": {
+                "description": "revert policy",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Policy"
+                ],
+                "summary": "revert policy",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/policies/{policyId}": {
+            "delete": {
+                "description": "remove an existing policy",
+                "tags": [
+                    "Policy"
+                ],
+                "summary": "remove a policy",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Policy ID",
+                        "name": "policyId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -339,6 +509,10 @@ const docTemplate = `{
                         "/host/dir:/container/dir",
                         "/src:/dst"
                     ]
+                },
+                "name": {
+                    "type": "string",
+                    "example": "my-container"
                 },
                 "network": {
                     "type": "string",
@@ -412,6 +586,44 @@ const docTemplate = `{
                 "image": {
                     "type": "string",
                     "example": "alpine:latest"
+                }
+            }
+        },
+        "policy.AddPolicyRequest": {
+            "type": "object",
+            "properties": {
+                "chain": {
+                    "type": "string",
+                    "example": "RAIND-EW"
+                },
+                "comment": {
+                    "type": "string",
+                    "example": "allow https traffic"
+                },
+                "dest": {
+                    "type": "string",
+                    "example": "dst-container-name"
+                },
+                "dport": {
+                    "type": "integer",
+                    "example": 443
+                },
+                "protocol": {
+                    "type": "string",
+                    "example": "tcp"
+                },
+                "source": {
+                    "type": "string",
+                    "example": "src-container-name"
+                }
+            }
+        },
+        "policy.ChangeNSModeRequest": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "example": "enforce"
                 }
             }
         },

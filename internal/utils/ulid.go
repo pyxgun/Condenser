@@ -11,5 +11,5 @@ import (
 var entropy = ulid.Monotonic(rand.Reader, 0)
 
 func NewUlid() string {
-	return strings.ToLower(ulid.MustNew(ulid.Timestamp(time.Now()), entropy).String())[:12]
+	return strings.ToLower(ulid.MustNew(ulid.Timestamp(time.Now()), entropy).String())
 }

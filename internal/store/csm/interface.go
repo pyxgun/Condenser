@@ -14,4 +14,5 @@ type CsmHandler interface {
 	GetContainerIdByName(name string) (string, error)
 	GetContainerNameById(containerId string) (string, error)
 	ResolveContainerId(str string) (string, error)
+	IsContainerExist(str string) bool
 }

@@ -1,5 +1,5 @@
 package hook
 
 type HookServiceHandler interface {
-	UpdateCsm(stateParameter ServiceStateModel, eventType string) error
+	HookAction(stateParameter ServiceStateModel, eventType string) error
 }

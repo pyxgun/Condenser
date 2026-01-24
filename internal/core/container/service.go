@@ -50,7 +50,7 @@ type ContainerService struct {
 // == service: create ==
 func (s *ContainerService) Create(createParameter ServiceCreateModel) (id string, err error) {
 	// 1. generate container id and name
-	containerId := utils.NewUlid()
+	containerId := utils.NewUlid()[:12]
 	//    if name is not set, generate a random name
 	containerName := createParameter.Name
 	if containerName == "" {
@@ -384,8 +384,9 @@ func (s *ContainerService) createContainerSpec(
 			"/usr/bin/curl", "-sS", "-X", "POST",
 			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
 			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: createRuntime",
+			"--cacert", utils.PublicCertPath, "--cert", utils.ClientCertPath, "--key", utils.ClientKeyPath,
 			"--data-binary", "@-",
-			"http://" + hookAddr + ":7756/v1/hooks/droplet",
+			"https://" + hookAddr + ":7756/v1/hooks/droplet",
 		}, ","),
 	}
 	createContainerHook := []string{
@@ -393,8 +394,9 @@ func (s *ContainerService) createContainerSpec(
 			"/usr/bin/curl", "-sS", "-X", "POST",
 			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
 			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: createContainer",
+			"--cacert", utils.PublicCertPath, "--cert", utils.ClientCertPath, "--key", utils.ClientKeyPath,
 			"--data-binary", "@-",
-			"http://" + hookAddr + ":7756/v1/hooks/droplet",
+			"https://" + hookAddr + ":7756/v1/hooks/droplet",
 		}, ","),
 	}
 	poststartHook := []string{
@@ -402,8 +404,9 @@ func (s *ContainerService) createContainerSpec(
 			"/usr/bin/curl", "-sS", "-X", "POST",
 			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
 			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: poststart",
+			"--cacert", utils.PublicCertPath, "--cert", utils.ClientCertPath, "--key", utils.ClientKeyPath,
 			"--data-binary", "@-",
-			"http://" + hookAddr + ":7756/v1/hooks/droplet",
+			"https://" + hookAddr + ":7756/v1/hooks/droplet",
 		}, ","),
 	}
 	stopContainerHook := []string{
@@ -411,8 +414,9 @@ func (s *ContainerService) createContainerSpec(
 			"/usr/bin/curl", "-sS", "-X", "POST",
 			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
 			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: stopContainer",
+			"--cacert", utils.PublicCertPath, "--cert", utils.ClientCertPath, "--key", utils.ClientKeyPath,
 			"--data-binary", "@-",
-			"http://" + hookAddr + ":7756/v1/hooks/droplet",
+			"https://" + hookAddr + ":7756/v1/hooks/droplet",
 		}, ","),
 	}
 	poststopHook := []string{
@@ -420,8 +424,9 @@ func (s *ContainerService) createContainerSpec(
 			"/usr/bin/curl", "-sS", "-X", "POST",
 			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
 			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: poststop",
+			"--cacert", utils.PublicCertPath, "--cert", utils.ClientCertPath, "--key", utils.ClientKeyPath,
 			"--data-binary", "@-",
-			"http://" + hookAddr + ":7756/v1/hooks/droplet",
+			"https://" + hookAddr + ":7756/v1/hooks/droplet",
 		}, ","),
 	}
 

@@ -6,9 +6,12 @@ import (
 	containerHandler "condenser/internal/api/http/container"
 	hookHandler "condenser/internal/api/http/hook"
 	imageHandler "condenser/internal/api/http/image"
+	policyHandler "condenser/internal/api/http/policy"
 	websocketHandler "condenser/internal/api/http/websocket"
+
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
+
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
@@ -38,6 +41,7 @@ func NewApiRouter() *chi.Mux {
 	imageHandler := imageHandler.NewRequestHandler()
 	socketHandler := websocketHandler.NewRequestHandler()
 	execSocketHandler := websocketHandler.NewExecRequestHandler()
+	policyHandler := policyHandler.NewRequestHandler()
 
 	// middleware
 	r.Use(middleware.RequestID)
@@ -62,6 +66,14 @@ func NewApiRouter() *chi.Mux {
 	// == websocket ==
 	r.Get("/v1/containers/{containerId}/attach", socketHandler.ServeHTTP)
 	r.Get("/v1/containers/{containerId}/exec/attach", execSocketHandler.ServeHTTP)
+
+	// == policy ==
+	r.Get("/v1/policies/{chain}", policyHandler.GetPolicyList)      //get policy
+	r.Post("/v1/policies", policyHandler.AddPolicy)                 // add policy
+	r.Post("/v1/policies/commit", policyHandler.CommitPolicy)       // commit policy
+	r.Post("/v1/policies/revert", policyHandler.RevertPolicy)       // revert policy
+	r.Post("/v1/policies/ns/mode", policyHandler.ChangeNSMode)      // change NS mode
+	r.Delete("/v1/policies/{policyId}", policyHandler.RemovePolicy) // remove policy
 
 	return r
 }

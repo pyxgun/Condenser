@@ -2,8 +2,11 @@ package main
 
 import (
 	httpapi "condenser/internal/api/http"
+	"condenser/internal/cert"
 	"condenser/internal/env"
 	"condenser/internal/monitor"
+	"condenser/internal/utils"
+	"crypto/tls"
 	"log"
 	"net/http"
 )
@@ -16,32 +19,59 @@ func main() {
 	}
 
 	// == rest api ==
-	// start Management Server
+	clientCA, err := cert.LoadCertPoolFromFile(utils.ClientIssuerCACertPath)
+	tlsCfg := &tls.Config{
+		MinVersion: tls.VersionTLS13,
+		ClientCAs:  clientCA,
+		ClientAuth: tls.RequireAndVerifyClientCert,
+	}
+
+	// Management Server
 	managementAddr := "127.0.0.1:7755"
 	managementRouter := httpapi.NewApiRouter()
+	if err != nil {
+		log.Fatal(err)
+	}
+	managementSrv := &http.Server{
+		Addr:      managementAddr,
+		Handler:   managementRouter,
+		TLSConfig: tlsCfg,
+	}
 	go func() {
 		log.Printf("[*] management server listening on %s", managementAddr)
-		if err := http.ListenAndServe(managementAddr, managementRouter); err != nil {
+		if err := managementSrv.ListenAndServeTLS(utils.PublicCertPath, utils.PrivateKeyPath); err != nil {
 			log.Fatal(err)
 		}
 	}()
 
+	// Hook Server
 	hookAddr := ":7756"
 	hookRouter := httpapi.NewHookRouter()
-	// start Hook Server
+	hookSrv := &http.Server{
+		Addr:      hookAddr,
+		Handler:   hookRouter,
+		TLSConfig: tlsCfg,
+	}
 	go func() {
 		log.Printf("[*] hook server listening on %s", hookAddr)
-		if err := http.ListenAndServe(hookAddr, hookRouter); err != nil {
+		if err := hookSrv.ListenAndServeTLS(utils.PublicCertPath, utils.PrivateKeyPath); err != nil {
 			log.Fatal(err)
 		}
 	}()
 
-	// start Swagger
+	// Swagger
 	swaggerAddr := ":7757"
 	swaggerRouter := httpapi.NewSwaggerRouter()
+	swaggerSrv := &http.Server{
+		Addr:    swaggerAddr,
+		Handler: swaggerRouter,
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS13,
+		},
+	}
 	go func() {
 		log.Printf("[*] swagger listening on %s", swaggerAddr)
-		if err := http.ListenAndServe(swaggerAddr, swaggerRouter); err != nil {
+		if err := swaggerSrv.ListenAndServeTLS(utils.PublicCertPath, utils.PrivateKeyPath); err != nil {
 			log.Fatal(err)
 		}
 	}()

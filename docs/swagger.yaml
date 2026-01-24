@@ -19,6 +19,9 @@ definitions:
         items:
           type: string
         type: array
+      name:
+        example: my-container
+        type: string
       network:
         example: raind0
         type: string
@@ -69,6 +72,33 @@ definitions:
     properties:
       image:
         example: alpine:latest
+        type: string
+    type: object
+  policy.AddPolicyRequest:
+    properties:
+      chain:
+        example: RAIND-EW
+        type: string
+      comment:
+        example: allow https traffic
+        type: string
+      dest:
+        example: dst-container-name
+        type: string
+      dport:
+        example: 443
+        type: integer
+      protocol:
+        example: tcp
+        type: string
+      source:
+        example: src-container-name
+        type: string
+    type: object
+  policy.ChangeNSModeRequest:
+    properties:
+      mode:
+        example: enforce
         type: string
     type: object
   utils.ApiResponse:
@@ -276,4 +306,115 @@ paths:
       summary: pull image
       tags:
       - image
+  /v1/policies:
+    get:
+      consumes:
+      - application/json
+      description: get policy
+      parameters:
+      - description: Chain Name
+        in: path
+        name: chainName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: get policy list
+      tags:
+      - Policy
+    post:
+      consumes:
+      - application/json
+      description: Add new policy
+      parameters:
+      - description: policy parameter
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/policy.AddPolicyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: Add policy
+      tags:
+      - Policy
+  /v1/policies/{policyId}:
+    delete:
+      description: remove an existing policy
+      parameters:
+      - description: Policy ID
+        in: path
+        name: policyId
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: remove a policy
+      tags:
+      - Policy
+  /v1/policies/commit:
+    post:
+      consumes:
+      - application/json
+      description: commit all policy
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: commit policy
+      tags:
+      - Policy
+  /v1/policies/ns/mode:
+    post:
+      consumes:
+      - application/json
+      description: change north-south mode
+      parameters:
+      - description: mode
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/policy.ChangeNSModeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: change north-south mode
+      tags:
+      - Policy
+  /v1/policies/revert:
+    post:
+      consumes:
+      - application/json
+      description: revert policy
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: revert policy
+      tags:
+      - Policy
 swagger: "2.0"

@@ -244,6 +244,23 @@ func (m *IpamManager) GetNetworkInfoById(containerId string) (string, Allocation
 	return address, networkInfo, err
 }
 
+func (m *IpamManager) GetVethById(containerId string) (string, error) {
+	var veth string
+	err := m.ipamStore.withLock(func(st *IpamState) error {
+		for _, p := range st.Pools {
+			for _, info := range p.Allocations {
+				if info.ContainerId != containerId {
+					continue
+				}
+				veth = info.Interface
+				return nil
+			}
+		}
+		return fmt.Errorf("contianer: %s not found", containerId)
+	})
+	return veth, err
+}
+
 func findFreeIpv4(ipnet *net.IPNet, gateway net.IP, alloc map[string]Allocation) (net.IP, error) {
 	network := ipnet.IP.To4()
 	if network == nil {
