@@ -397,6 +397,29 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/policies/revert": {
+            "post": {
+                "description": "revert policy",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Policy"
+                ],
+                "summary": "revert policy",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/policies/{policyId}": {
             "delete": {
                 "description": "remove an existing policy",

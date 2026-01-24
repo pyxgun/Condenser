@@ -2,6 +2,8 @@ package npm
 
 type NpmStoreHandler interface {
 	SetNetworkPolicy() error
+	Backup() error
+	Revert() (err error)
 }
 
 type NpmHandler interface {

@@ -143,8 +143,14 @@ func (h *IptablesManager) InsertRuleToChain(chainName string, ruleModel RuleMode
 	if ruleModel.Protocol != "" {
 		ruleParam = slices.Concat(ruleParam, []string{"-p", ruleModel.Protocol})
 	}
+	if ruleModel.Source != "" {
+		ruleParam = slices.Concat(ruleParam, []string{"-s", ruleModel.Source})
+	}
 	if ruleModel.SourcePort > 0 {
 		ruleParam = slices.Concat(ruleParam, []string{"--sport", strconv.Itoa(ruleModel.SourcePort)})
+	}
+	if ruleModel.Destination != "" {
+		ruleParam = slices.Concat(ruleParam, []string{"-d", ruleModel.Destination})
 	}
 	if ruleModel.DestPort > 0 {
 		ruleParam = slices.Concat(ruleParam, []string{"--dport", strconv.Itoa(ruleModel.DestPort)})

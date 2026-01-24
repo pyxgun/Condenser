@@ -374,4 +374,19 @@ paths:
       summary: commit policy
       tags:
       - Policy
+  /v1/policies/revert:
+    post:
+      consumes:
+      - application/json
+      description: revert policy
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: revert policy
+      tags:
+      - Policy
 swagger: "2.0"

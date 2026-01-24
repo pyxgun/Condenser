@@ -105,6 +105,26 @@ func (h *RequestHandler) CommitPolicy(w http.ResponseWriter, r *http.Request) {
 	apimodel.RespondSuccess(w, http.StatusOK, "policy committed", nil)
 }
 
+// RevertPolicy godoc
+// @Summary revert policy
+// @Description revert policy
+// @Tags Policy
+// @Accept json
+// @Produce json
+// @Success 201 {object} apimodel.ApiResponse
+// @Router /v1/policies/revert [post]
+func (h *RequestHandler) RevertPolicy(w http.ResponseWriter, r *http.Request) {
+	// service: revert
+	err := h.policyServiceHandler.RevertPolicy()
+	if err != nil {
+		apimodel.RespondFail(w, http.StatusInternalServerError, "service failed: "+err.Error(), nil)
+		return
+	}
+
+	// encode response
+	apimodel.RespondSuccess(w, http.StatusOK, "policy reverted", nil)
+}
+
 // GetPolicyList godoc
 // @Summary get policy list
 // @Description get policy

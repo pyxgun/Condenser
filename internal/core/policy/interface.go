@@ -8,7 +8,9 @@ type PolicyServiceHandler interface {
 
 	AddUserPolicy(param ServiceAddPolicyModel) (string, error)
 	RemoveUserPolicy(param ServiceRemovePolicyModel) error
+
 	CommitPolicy() error
+	RevertPolicy() error
 }
 
 type IptablesHandler interface {

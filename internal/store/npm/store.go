@@ -116,9 +116,62 @@ func (s *NpmStore) atomicSave(np *NetworkPolicy) error {
 	return s.filesystemHandler.Rename(tmp, s.path)
 }
 
+func (s *NpmStore) Backup() error {
+	file := s.path + ".running"
+	sf, err := s.filesystemHandler.Open(s.path)
+	if err != nil {
+		return err
+	}
+	defer sf.Close()
+
+	df, err := s.filesystemHandler.OpenFile(file, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer df.Close()
+
+	_, err = s.filesystemHandler.Copy(df, sf)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *NpmStore) Revert() (err error) {
+	// 1. rename original file
+	orgFile := s.path + ".org"
+	err = s.filesystemHandler.Rename(s.path, orgFile)
+	if err != nil {
+		return err
+	}
+
+	// 2. rename .running file
+	runningFile := s.path + ".running"
+	err = s.filesystemHandler.Rename(runningFile, s.path)
+	if err != nil {
+		return err
+	}
+
+	// 3. backup file
+	err = s.Backup()
+	if err != nil {
+		return err
+	}
+
+	// 4. remove .org file
+	err = s.filesystemHandler.Remove(orgFile)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *NpmStore) SetNetworkPolicy() error {
-	return s.withLock(func(np *NetworkPolicy) error {
+	err := s.withLock(func(np *NetworkPolicy) error {
 		np.Version = "v1"
 		return nil
 	})
+	err = s.Backup()
+	return err
 }

@@ -6,22 +6,25 @@ import (
 	"condenser/internal/store/npm"
 	"condenser/internal/utils"
 	"fmt"
+	"log"
 )
 
 func NewwServicePolicy() *ServicePolicy {
 	return &ServicePolicy{
-		ipamHandler: ipam.NewIpamManager(ipam.NewIpamStore(utils.IpamStorePath)),
-		npmHandler:  npm.NewNpmManager(npm.NewNpmStore(utils.NpmStorePath)),
-		csmHandler:  csm.NewCsmManager(csm.NewCsmStore(utils.CsmStorePath)),
+		ipamHandler:     ipam.NewIpamManager(ipam.NewIpamStore(utils.IpamStorePath)),
+		npmHandler:      npm.NewNpmManager(npm.NewNpmStore(utils.NpmStorePath)),
+		npmStoreHandler: npm.NewNpmStore(utils.NpmStorePath),
+		csmHandler:      csm.NewCsmManager(csm.NewCsmStore(utils.CsmStorePath)),
 
 		iptablesHandler: NewIptablesManager(),
 	}
 }
 
 type ServicePolicy struct {
-	ipamHandler ipam.IpamHandler
-	npmHandler  npm.NpmHandler
-	csmHandler  csm.CsmHandler
+	ipamHandler     ipam.IpamHandler
+	npmHandler      npm.NpmHandler
+	npmStoreHandler npm.NpmStoreHandler
+	csmHandler      csm.CsmHandler
 
 	iptablesHandler IptablesHandler
 }
@@ -31,23 +34,40 @@ func (s *ServicePolicy) AddUserPolicy(param ServiceAddPolicyModel) (string, erro
 	status := "before_commit"
 
 	// resolve container id/name
-	_, srcContainerName := s.resolveContainerNameAndInfo(param.Source)
-	_, dstContainerName := s.resolveContainerNameAndInfo(param.Destination)
+	var (
+		srcHost npm.HostInfo
+		dstHost npm.HostInfo
+	)
+
+	if param.ChainName == "RAIND-EW" {
+		_, srcContainerName := s.resolveContainerNameAndInfo(param.Source)
+		_, dstContainerName := s.resolveContainerNameAndInfo(param.Destination)
+		srcHost = npm.HostInfo{
+			ContainerName: srcContainerName,
+		}
+		dstHost = npm.HostInfo{
+			ContainerName: dstContainerName,
+		}
+	} else {
+		_, srcContainerName := s.resolveContainerNameAndInfo(param.Source)
+		srcHost = npm.HostInfo{
+			ContainerName: srcContainerName,
+		}
+		dstHost = npm.HostInfo{
+			Address: param.Destination,
+		}
+	}
 
 	if err := s.npmHandler.AddPolicy(
 		param.ChainName,
 		npm.Policy{
-			Id:     policyId,
-			Status: status,
-			Source: npm.ContainerInfo{
-				ContainerName: srcContainerName,
-			},
-			Destination: npm.ContainerInfo{
-				ContainerName: dstContainerName,
-			},
-			Protocol: param.Protocol,
-			DestPort: param.DestPort,
-			Comment:  param.Comment,
+			Id:          policyId,
+			Status:      status,
+			Source:      srcHost,
+			Destination: dstHost,
+			Protocol:    param.Protocol,
+			DestPort:    param.DestPort,
+			Comment:     param.Comment,
 		},
 	); err != nil {
 		return "", err
@@ -85,6 +105,17 @@ func (s *ServicePolicy) CommitPolicy() error {
 	if err := s.BuildUserPolicy(); err != nil {
 		return err
 	}
+	// 3. baclup
+	if err := s.npmStoreHandler.Backup(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *ServicePolicy) RevertPolicy() error {
+	if err := s.npmStoreHandler.Revert(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -103,14 +134,18 @@ func (s *ServicePolicy) GetPolicyList(param ServiceListModel) PolicyListModel {
 
 		for _, p := range policyList {
 			policies = append(policies, PolicyInfo{
-				Id:          p.Id,
-				Status:      p.Status,
-				Reason:      p.Reason,
-				Source:      ContainerInfo(p.Source),
-				Destination: ContainerInfo(p.Destination),
-				Protocol:    p.Protocol,
-				DestPort:    p.DestPort,
-				Comment:     p.Comment,
+				Id:     p.Id,
+				Status: p.Status,
+				Reason: p.Reason,
+				Source: HostInfo{
+					ContainerName: p.Source.ContainerName,
+				},
+				Destination: HostInfo{
+					ContainerName: p.Destination.ContainerName,
+				},
+				Protocol: p.Protocol,
+				DestPort: p.DestPort,
+				Comment:  p.Comment,
 			})
 		}
 
@@ -121,14 +156,18 @@ func (s *ServicePolicy) GetPolicyList(param ServiceListModel) PolicyListModel {
 
 		for _, p := range policyList {
 			policies = append(policies, PolicyInfo{
-				Id:          p.Id,
-				Status:      p.Status,
-				Reason:      p.Reason,
-				Source:      ContainerInfo(p.Source),
-				Destination: ContainerInfo(p.Destination),
-				Protocol:    p.Protocol,
-				DestPort:    p.DestPort,
-				Comment:     p.Comment,
+				Id:     p.Id,
+				Status: p.Status,
+				Reason: p.Reason,
+				Source: HostInfo{
+					ContainerName: p.Source.ContainerName,
+				},
+				Destination: HostInfo{
+					Address: p.Destination.Address,
+				},
+				Protocol: p.Protocol,
+				DestPort: p.DestPort,
+				Comment:  p.Comment,
 			})
 		}
 
@@ -139,14 +178,18 @@ func (s *ServicePolicy) GetPolicyList(param ServiceListModel) PolicyListModel {
 
 		for _, p := range policyList {
 			policies = append(policies, PolicyInfo{
-				Id:          p.Id,
-				Status:      p.Status,
-				Reason:      p.Reason,
-				Source:      ContainerInfo(p.Source),
-				Destination: ContainerInfo(p.Destination),
-				Protocol:    p.Protocol,
-				DestPort:    p.DestPort,
-				Comment:     p.Comment,
+				Id:     p.Id,
+				Status: p.Status,
+				Reason: p.Reason,
+				Source: HostInfo{
+					ContainerName: p.Source.ContainerName,
+				},
+				Destination: HostInfo{
+					Address: p.Destination.Address,
+				},
+				Protocol: p.Protocol,
+				DestPort: p.DestPort,
+				Comment:  p.Comment,
 			})
 		}
 
@@ -480,23 +523,24 @@ func (s *ServicePolicy) buildRaindNSEnforceChain(networkList []ipam.NetworkList,
 }
 
 func (s *ServicePolicy) BuildUserPolicy() error {
-	// ns mode (enforce:true or observe:false)
-	//enforce := s.npmHandler.IsNsEnforce()
-
+	var err error = nil
 	// 1. add RAIND-EW user policy
-	if err := s.insertRaindEWUserPolicy(); err != nil {
-		return err
-	}
+	ewPolicies := s.npmHandler.GetEWPolicyList()
+	err = s.insertRaindEWUserPolicy(ewPolicies)
 
-	return nil
+	// 2. add RAIND-NS-OBS user policy
+	nsObsPolicies := s.npmHandler.GetNSObsPolicyList()
+	err = s.insertRaindNSUserPolicy("RAIND-NS-OBS", nsObsPolicies)
+
+	// 3. add RAIND-NS-ENF user policy
+	nsEnfPolicies := s.npmHandler.GetNSEnfPolicyList()
+	err = s.insertRaindNSUserPolicy("RAIND-NS-ENF", nsEnfPolicies)
+
+	return err
 }
 
-func (s *ServicePolicy) insertRaindEWUserPolicy() error {
+func (s *ServicePolicy) insertRaindEWUserPolicy(policies []npm.Policy) error {
 	chainName := "RAIND-EW"
-
-	// read user policy list
-	policies := s.npmHandler.GetEWPolicyList()
-
 	for _, p := range policies {
 		// check remove flag
 		//   if status is "remove_next_commit", remove policy from store and not apply the policy
@@ -552,7 +596,7 @@ func (s *ServicePolicy) insertRaindEWUserPolicy() error {
 			},
 			"ACCEPT",
 		); err != nil {
-			return err
+			continue
 		}
 		// set status: applied
 		if err := s.npmHandler.UpdateStatus(
@@ -561,7 +605,74 @@ func (s *ServicePolicy) insertRaindEWUserPolicy() error {
 			"applied",
 			"",
 		); err != nil {
-			return err
+			continue
+		}
+	}
+
+	return nil
+}
+
+func (s *ServicePolicy) insertRaindNSUserPolicy(chainName string, policies []npm.Policy) error {
+	for _, p := range policies {
+		log.Println(p)
+		// check remove flag
+		//   if status is "remove_next_commit", remove policy from store and not apply the policy
+		if p.Status == "remove_next_commit" {
+			// remove from store
+			if err := s.npmHandler.RemovePolicy(p.Id); err != nil {
+				return err
+			}
+			continue
+		}
+
+		// resolve container id/name
+		srcContainerId, _ := s.resolveContainerNameAndInfo(p.Source.ContainerName)
+
+		_, err := s.ipamHandler.GetVethById(srcContainerId)
+		if err != nil {
+			// set status: unresolved, reason: contaner: <str> not found
+			if err := s.npmHandler.UpdateStatus(
+				chainName,
+				p.Id,
+				"unresolved",
+				fmt.Sprintf("container: %s not found", p.Source.ContainerName),
+			); err != nil {
+				return err
+			}
+			continue
+		}
+		_, bridgeDev, srcAddress, _ := s.ipamHandler.GetContainerAddress(srcContainerId)
+		dstDev, _ := s.ipamHandler.GetDefaultInterface()
+
+		var action string
+		if chainName == "RAIND-NS-OBS" {
+			action = "DROP"
+		} else {
+			action = "ACCEPT"
+		}
+
+		if err := s.iptablesHandler.InsertRuleToChain(
+			chainName,
+			RuleModel{
+				InputDev:    bridgeDev,
+				Source:      srcAddress,
+				OutputDev:   dstDev,
+				Destination: p.Destination.Address,
+				Protocol:    p.Protocol,
+				DestPort:    p.DestPort,
+			},
+			action,
+		); err != nil {
+			continue
+		}
+		// set status: applied
+		if err := s.npmHandler.UpdateStatus(
+			chainName,
+			p.Id,
+			"applied",
+			"",
+		); err != nil {
+			continue
 		}
 	}
 

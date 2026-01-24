@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"io"
 	"os"
 	"syscall"
 )
@@ -11,6 +12,7 @@ type FilesystemHandler interface {
 	WriteFile(name string, data []byte, perm os.FileMode) error
 	Open(name string) (*os.File, error)
 	OpenFile(name string, flag int, perm os.FileMode) (*os.File, error)
+	Copy(dst io.Writer, src io.Reader) (int64, error)
 	Remove(name string) error
 	RemoveAll(path string) error
 	Rename(oldpath string, newpath string) error
@@ -43,6 +45,10 @@ func (s *FilesystemExecutor) Open(name string) (*os.File, error) {
 
 func (s *FilesystemExecutor) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
 	return os.OpenFile(name, flag, perm)
+}
+
+func (s *FilesystemExecutor) Copy(dst io.Writer, src io.Reader) (int64, error) {
+	return io.Copy(dst, src)
 }
 
 func (s *FilesystemExecutor) Remove(name string) error {

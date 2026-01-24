@@ -23,16 +23,17 @@ type PolicyChain struct {
 }
 
 type Policy struct {
-	Id          string        `json:"id"`
-	Status      string        `json:"status"`
-	Reason      string        `json:"reason,omitempty"`
-	Source      ContainerInfo `json:"source"`
-	Destination ContainerInfo `json:"destination"`
-	Protocol    string        `json:"protocol,omitempty"`
-	DestPort    int           `json:"dport,omitempty"`
-	Comment     string        `json:"comment,omitempty"`
+	Id          string   `json:"id"`
+	Status      string   `json:"status"`
+	Reason      string   `json:"reason,omitempty"`
+	Source      HostInfo `json:"source"`
+	Destination HostInfo `json:"destination"`
+	Protocol    string   `json:"protocol,omitempty"`
+	DestPort    int      `json:"dport,omitempty"`
+	Comment     string   `json:"comment,omitempty"`
 }
 
-type ContainerInfo struct {
+type HostInfo struct {
 	ContainerName string `json:"container_name,omitempty"`
+	Address       string `json:"address,omitempty"`
 }

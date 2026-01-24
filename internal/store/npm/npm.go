@@ -1,6 +1,8 @@
 package npm
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func NewNpmManager(npmStrore *NpmStore) *NpmManager {
 	return &NpmManager{
@@ -147,14 +149,14 @@ func (m *NpmManager) RemovePolicy(policyId string) error {
 			if p.Id != policyId {
 				continue
 			}
-			np.Policies.EastWestPolicy = append(np.Policies.NorthSouthObservePolicy[:i], np.Policies.NorthSouthObservePolicy[i+1:]...)
+			np.Policies.NorthSouthObservePolicy = append(np.Policies.NorthSouthObservePolicy[:i], np.Policies.NorthSouthObservePolicy[i+1:]...)
 			return nil
 		}
 		for i, p := range np.Policies.NorthSouthEnforcePolicy {
 			if p.Id != policyId {
 				continue
 			}
-			np.Policies.EastWestPolicy = append(np.Policies.NorthSouthEnforcePolicy[:i], np.Policies.NorthSouthEnforcePolicy[i+1:]...)
+			np.Policies.NorthSouthEnforcePolicy = append(np.Policies.NorthSouthEnforcePolicy[:i], np.Policies.NorthSouthEnforcePolicy[i+1:]...)
 			return nil
 		}
 		return fmt.Errorf("ID: %s not found", policyId)
