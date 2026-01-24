@@ -6,6 +6,7 @@ type PolicyServiceHandler interface {
 
 	GetPolicyList(param ServiceListModel) PolicyListModel
 
+	ChangeNSMode(mode string) error
 	AddUserPolicy(param ServiceAddPolicyModel) (string, error)
 	RemoveUserPolicy(param ServiceRemovePolicyModel) error
 

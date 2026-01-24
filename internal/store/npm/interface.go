@@ -22,4 +22,5 @@ type NpmHandler interface {
 	RemovePolicy(policyId string) error
 
 	UpdateStatus(chainName string, ruleId string, status string, reason string) error
+	ChangeNSMode(mode string) error
 }

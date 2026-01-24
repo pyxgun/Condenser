@@ -16,3 +16,7 @@ type AddPolicyResponse struct {
 type ListPolicyRequest struct {
 	ChainName string `json:"chain" example:"RAIN-EW"`
 }
+
+type ChangeNSModeRequest struct {
+	Mode string `json:"mode" example:"enforce"`
+}

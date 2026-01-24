@@ -72,6 +72,7 @@ func NewApiRouter() *chi.Mux {
 	r.Post("/v1/policies", policyHandler.AddPolicy)                 // add policy
 	r.Post("/v1/policies/commit", policyHandler.CommitPolicy)       // commit policy
 	r.Post("/v1/policies/revert", policyHandler.RevertPolicy)       // revert policy
+	r.Post("/v1/policies/ns/mode", policyHandler.ChangeNSMode)      // change NS mode
 	r.Delete("/v1/policies/{policyId}", policyHandler.RemovePolicy) // remove policy
 
 	return r

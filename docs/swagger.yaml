@@ -95,6 +95,12 @@ definitions:
         example: src-container-name
         type: string
     type: object
+  policy.ChangeNSModeRequest:
+    properties:
+      mode:
+        example: enforce
+        type: string
+    type: object
   utils.ApiResponse:
     properties:
       data: {}
@@ -372,6 +378,28 @@ paths:
           schema:
             $ref: '#/definitions/utils.ApiResponse'
       summary: commit policy
+      tags:
+      - Policy
+  /v1/policies/ns/mode:
+    post:
+      consumes:
+      - application/json
+      description: change north-south mode
+      parameters:
+      - description: mode
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/policy.ChangeNSModeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: change north-south mode
       tags:
       - Policy
   /v1/policies/revert:

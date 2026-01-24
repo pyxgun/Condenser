@@ -200,3 +200,10 @@ func (m *NpmManager) UpdateStatus(chainName string, policyId string, status stri
 		return fmt.Errorf("ID: %s not found", policyId)
 	})
 }
+
+func (m *NpmManager) ChangeNSMode(mode string) error {
+	return m.npmStore.withLock(func(np *NetworkPolicy) error {
+		np.DefaultRule.NorthSouth.Mode = mode
+		return nil
+	})
+}

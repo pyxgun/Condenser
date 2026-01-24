@@ -397,6 +397,40 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/policies/ns/mode": {
+            "post": {
+                "description": "change north-south mode",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Policy"
+                ],
+                "summary": "change north-south mode",
+                "parameters": [
+                    {
+                        "description": "mode",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/policy.ChangeNSModeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/policies/revert": {
             "post": {
                 "description": "revert policy",
@@ -581,6 +615,15 @@ const docTemplate = `{
                 "source": {
                     "type": "string",
                     "example": "src-container-name"
+                }
+            }
+        },
+        "policy.ChangeNSModeRequest": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "example": "enforce"
                 }
             }
         },

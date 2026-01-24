@@ -22,7 +22,7 @@ type HookService struct {
 	policyHandler policy.PolicyServiceHandler
 }
 
-func (s *HookService) UpdateCsm(stateParameter ServiceStateModel, eventType string) error {
+func (s *HookService) HookAction(stateParameter ServiceStateModel, eventType string) error {
 	// switch eventType
 	switch eventType {
 	case "createRuntime":

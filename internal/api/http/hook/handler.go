@@ -40,7 +40,7 @@ func (h *RequestHandler) ApplyHook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// service: hook
-	if err := h.hookServiceHandler.UpdateCsm(st, eventType); err != nil {
+	if err := h.hookServiceHandler.HookAction(st, eventType); err != nil {
 		apimodel.RespondFail(w, http.StatusInternalServerError, "service hook failed: "+err.Error(), nil)
 	}
 

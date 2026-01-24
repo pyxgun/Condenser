@@ -203,6 +203,20 @@ func (s *ServicePolicy) GetPolicyList(param ServiceListModel) PolicyListModel {
 	}
 }
 
+func (s *ServicePolicy) ChangeNSMode(mode string) error {
+	if mode != "enforce" && mode != "observe" {
+		return fmt.Errorf("invalid mode: %s", mode)
+	}
+	if err := s.npmHandler.ChangeNSMode(mode); err != nil {
+		return err
+	}
+	// commit
+	if err := s.CommitPolicy(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *ServicePolicy) resolveContainerNameAndInfo(str string) (string, string) {
 	var (
 		containerId   string

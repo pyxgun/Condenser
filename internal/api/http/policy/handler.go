@@ -151,3 +151,31 @@ func (h *RequestHandler) GetPolicyList(w http.ResponseWriter, r *http.Request) {
 	// encode response
 	apimodel.RespondSuccess(w, http.StatusOK, "get list success", policyList)
 }
+
+// ChangeNSMode godoc
+// @Summary change north-south mode
+// @Description change north-south mode
+// @Tags Policy
+// @Accept json
+// @Produce json
+// @Param request body ChangeNSModeRequest true "mode"
+// @Success 201 {object} apimodel.ApiResponse
+// @Router /v1/policies/ns/mode [post]
+func (h *RequestHandler) ChangeNSMode(w http.ResponseWriter, r *http.Request) {
+	// decode request
+	var req ChangeNSModeRequest
+	if err := apimodel.DecodeRequestBody(r, &req); err != nil {
+		apimodel.RespondFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), req)
+		return
+	}
+
+	// service: change ns mode
+	err := h.policyServiceHandler.ChangeNSMode(req.Mode)
+	if err != nil {
+		apimodel.RespondFail(w, http.StatusInternalServerError, "service failed: "+err.Error(), req)
+		return
+	}
+
+	// encode response
+	apimodel.RespondSuccess(w, http.StatusOK, "North-South Mode changed", req)
+}
