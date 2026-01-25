@@ -27,7 +27,7 @@ func (s *HookService) HookAction(stateParameter ServiceStateModel, eventType str
 	switch eventType {
 	case "createRuntime":
 		if err := s.csmHandler.UpdateContainer(stateParameter.Id, stateParameter.Status, stateParameter.Pid); err != nil {
-			return fmt.Errorf("csm create failed: %w", err)
+			return fmt.Errorf("csm update failed: %w", err)
 		}
 	case "createContainer":
 		if err := s.csmHandler.UpdateContainer(stateParameter.Id, stateParameter.Status, stateParameter.Pid); err != nil {

@@ -2,7 +2,10 @@ package http
 
 import (
 	_ "condenser/docs"
+	"net/http"
+	"strings"
 
+	certHandler "condenser/internal/api/http/cert"
 	containerHandler "condenser/internal/api/http/container"
 	hookHandler "condenser/internal/api/http/hook"
 	imageHandler "condenser/internal/api/http/image"
@@ -47,6 +50,7 @@ func NewApiRouter() *chi.Mux {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(RequireSPIFFE("spiffe://raind/cli/"))
 
 	// == v1 ==
 	// == containers ==
@@ -86,9 +90,46 @@ func NewHookRouter() *chi.Mux {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(RequireSPIFFE("spiffe://raind/hook"))
 
 	// == hook ==
 	r.Post("/v1/hooks/droplet", hookHandler.ApplyHook)
 
 	return r
+}
+
+func NewCARouter() *chi.Mux {
+	r := chi.NewRouter()
+	certHandler := certHandler.NewRequestHandler()
+
+	// middleware
+	r.Use(middleware.RequestID)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(RequireSPIFFE("spiffe://raind/droplet/"))
+
+	// == CA ==
+	r.Post("/v1/pki/sign", certHandler.SignCSRHandler)
+
+	return r
+}
+
+func RequireSPIFFE(prefix string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+				http.Error(w, "client certificate required", http.StatusUnauthorized)
+				return
+			}
+			// validate
+			cert := r.TLS.PeerCertificates[0]
+			for _, uri := range cert.URIs {
+				if strings.HasPrefix(uri.String(), prefix) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			http.Error(w, "forbidden", http.StatusForbidden)
+		})
+	}
 }

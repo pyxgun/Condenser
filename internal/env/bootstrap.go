@@ -380,7 +380,23 @@ func (m *BootstrapManager) setupCertificate() error {
 		utils.ClientIssuerCAKeyPath,
 		cert.ClientCertConfig{
 			CommonName: "raind-client",
-			DNSNames:   []string{"raind-client"},
+			SpiiffeId:  "spiffe://raind/cli/admin",
+			ValidFor:   1 * 365 * 24 * time.Hour, // 1 year
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	// 4. csr request client cert
+	err = m.certHandler.IssueClientCert(
+		utils.HookClientCertPath,
+		utils.HookClientKeyPath,
+		utils.ClientIssuerCACertPath,
+		utils.ClientIssuerCAKeyPath,
+		cert.ClientCertConfig{
+			CommonName: "raind-hook-client",
+			SpiiffeId:  "spiffe://raind/droplet/container",
 			ValidFor:   1 * 365 * 24 * time.Hour, // 1 year
 		},
 	)

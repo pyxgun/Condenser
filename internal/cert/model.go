@@ -13,6 +13,7 @@ type CertConfig struct {
 }
 
 type ClientCertConfig struct {
+	SpiiffeId  string
 	CommonName string
 	DNSNames   []string
 	URISANs    []string

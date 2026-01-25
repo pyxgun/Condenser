@@ -7,7 +7,9 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"math/big"
+	"net/url"
 	"os"
 	"time"
 )
@@ -137,6 +139,11 @@ func (m *CertManager) IssueClientCert(certPath string, keyPath string, CACertPat
 		return err
 	}
 
+	uri, err := url.Parse(cfg.SpiiffeId)
+	if err != nil || uri.Scheme != "spiffe" || uri.Host == "" {
+		return fmt.Errorf("invalid SPIFFE ID: %q", cfg.SpiiffeId)
+	}
+
 	template := x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
@@ -150,7 +157,7 @@ func (m *CertManager) IssueClientCert(certPath string, keyPath string, CACertPat
 		},
 		BasicConstraintsValid: true,
 		IsCA:                  false,
-		DNSNames:              cfg.DNSNames,
+		URIs:                  []*url.URL{uri},
 	}
 
 	// load CA cert/key
@@ -227,6 +234,34 @@ func (m *CertManager) writePem(path string, typ string, der []byte, perm os.File
 func (m *CertManager) isFileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func (m *CertManager) IssueClientCertFromCSR(
+	csr *x509.CertificateRequest, caCert *x509.Certificate, caKey *rsa.PrivateKey,
+	spiffe *url.URL, id string, validFor time.Duration,
+) ([]byte, error) {
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return nil, err
+	}
+
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject: pkix.Name{
+			CommonName: "raind-client",
+		},
+		NotBefore:             time.Now().Add(-5 * time.Minute),
+		NotAfter:              time.Now().Add(validFor),
+		BasicConstraintsValid: true,
+		IsCA:                  false,
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageClientAuth,
+		},
+		URIs: []*url.URL{spiffe},
+	}
+
+	return x509.CreateCertificate(rand.Reader, template, caCert, csr.PublicKey, caKey)
 }
 
 func LoadCertPoolFromFile(path string) (*x509.CertPool, error) {
