@@ -23,4 +23,6 @@ const (
 	ClientIssuerCAKeyPath  = "/etc/raind/cert/raindClientCA.key"
 	ClientCertPath         = "/etc/raind/cert/raindClient.crt"
 	ClientKeyPath          = "/etc/raind/cert/raindClient.key"
+	HookClientCertPath     = "/etc/raind/cert/raindHookClient.crt"
+	HookClientKeyPath      = "/etc/raind/cert/raindHookClient.key"
 )

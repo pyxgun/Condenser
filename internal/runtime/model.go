@@ -20,12 +20,18 @@ type SpecModel struct {
 	UpperDir   string
 	WorkDir    string
 
-	CreateRuntimeHook   []string
-	CreateContainerHook []string
-	StartContainerHook  []string
-	PoststartHook       []string
-	StopContainerHook   []string
-	PoststopHook        []string
+	CreateRuntimeHook      []string
+	CreateRuntimeHookEnv   []string
+	CreateContainerHook    []string
+	CreateContainerHookEnv []string
+	StartContainerHook     []string
+	StartContainerHookEnv  []string
+	PoststartHook          []string
+	PoststartHookEnv       []string
+	StopContainerHook      []string
+	StopContainerHookEnv   []string
+	PoststopHook           []string
+	PoststopHookEnv        []string
 
 	Output string
 }

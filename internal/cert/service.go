@@ -1,22 +1,31 @@
 package cert
 
 import (
+	"condenser/internal/store/csm"
+	"condenser/internal/utils"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"math/big"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
 func NewCertManager() *CertManager {
-	return &CertManager{}
+	return &CertManager{
+		csmHandler: csm.NewCsmManager(csm.NewCsmStore(utils.CsmStorePath)),
+	}
 }
 
-type CertManager struct{}
+type CertManager struct {
+	csmHandler csm.CsmHandler
+}
 
 func (m *CertManager) EnsureSelfSignedCert(certPath string, keyPath string, cfg CertConfig) error {
 	if m.isFileExists(certPath) && m.isFileExists(keyPath) {
@@ -137,6 +146,11 @@ func (m *CertManager) IssueClientCert(certPath string, keyPath string, CACertPat
 		return err
 	}
 
+	uri, err := url.Parse(cfg.SpiiffeId)
+	if err != nil || uri.Scheme != "spiffe" || uri.Host == "" {
+		return fmt.Errorf("invalid SPIFFE ID: %q", cfg.SpiiffeId)
+	}
+
 	template := x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
@@ -150,7 +164,7 @@ func (m *CertManager) IssueClientCert(certPath string, keyPath string, CACertPat
 		},
 		BasicConstraintsValid: true,
 		IsCA:                  false,
-		DNSNames:              cfg.DNSNames,
+		URIs:                  []*url.URL{uri},
 	}
 
 	// load CA cert/key
@@ -227,6 +241,61 @@ func (m *CertManager) writePem(path string, typ string, der []byte, perm os.File
 func (m *CertManager) isFileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func (m *CertManager) IssueClientCertFromCSR(
+	csr *x509.CertificateRequest, caCert *x509.Certificate, caKey *rsa.PrivateKey,
+	spiffe *url.URL, id string, validFor time.Duration,
+) ([]byte, error) {
+	// validate container id
+	path := strings.TrimPrefix(spiffe.Path, "/")
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 || parts[0] != "hook" {
+		return nil, fmt.Errorf("invalid SPIFFE ID format")
+	}
+	containerId := parts[1]
+	if containerId == "" {
+		return nil, fmt.Errorf("container id empty")
+	}
+	// check if the container id exxist
+	if ok := m.csmHandler.IsContainerExist(containerId); !ok {
+		return nil, fmt.Errorf("invalid container id")
+	}
+	// check the current contianer status is creating
+	containerInfo, _ := m.csmHandler.GetContainerById(containerId)
+	if containerInfo.State != "creating" {
+		return nil, fmt.Errorf("invalid container id")
+	}
+
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return nil, err
+	}
+
+	// re-build SPIFFE ID
+	newSpiffeId := url.URL{
+		Scheme: "spiffe",
+		Host:   "raind",
+		Path:   "hook/" + containerInfo.ContainerId,
+	}
+
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject: pkix.Name{
+			CommonName: "raind-client",
+		},
+		NotBefore:             time.Now().Add(-5 * time.Minute),
+		NotAfter:              time.Now().Add(validFor),
+		BasicConstraintsValid: true,
+		IsCA:                  false,
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageClientAuth,
+		},
+		URIs: []*url.URL{&newSpiffeId},
+	}
+
+	return x509.CreateCertificate(rand.Reader, template, caCert, csr.PublicKey, caKey)
 }
 
 func LoadCertPoolFromFile(path string) (*x509.CertPool, error) {

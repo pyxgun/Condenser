@@ -249,6 +249,7 @@ func (s *ContainerService) setupContainerDirectory(containerId string) error {
 		filepath.Join(containerDir, "merged"),
 		filepath.Join(containerDir, "etc"),
 		filepath.Join(containerDir, "logs"),
+		filepath.Join(containerDir, "cert"),
 	}
 	for _, dir := range dirs {
 		if err := s.filesystemHandler.MkdirAll(dir, 0o755); err != nil {
@@ -381,53 +382,77 @@ func (s *ContainerService) createContainerSpec(
 	hookAddr = strings.Split(hookAddr, "/")[0]
 	createRuntimeHook := []string{
 		strings.Join([]string{
-			"/usr/bin/curl", "-sS", "-X", "POST",
-			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
-			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: createRuntime",
-			"--cacert", utils.PublicCertPath, "--cert", utils.ClientCertPath, "--key", utils.ClientKeyPath,
-			"--data-binary", "@-",
-			"https://" + hookAddr + ":7756/v1/hooks/droplet",
+			"/usr/bin/raind-hook",
+			"--url", "https://" + hookAddr + ":7757/v1/pki/sign",
+			"--event", "requestCert",
+			"--ca", utils.PublicCertPath,
+			"--cert", utils.HookClientCertPath,
+			"--key", utils.HookClientKeyPath,
 		}, ","),
+		strings.Join([]string{
+			"/usr/bin/raind-hook",
+			"--url", "https://" + hookAddr + ":7756/v1/hooks/droplet",
+			"--event", "createRuntime",
+			"--ca", utils.PublicCertPath,
+			"--cert", filepath.Join(utils.ContainerRootDir, containerId, "/cert/client.crt"),
+			"--key", filepath.Join(utils.ContainerRootDir, containerId, "/cert/client.key"),
+		}, ","),
+	}
+	createRuntimeHookEnv := []string{
+		"RAIND-HOOK-SETTER=CONDENSER",
+		"RAIND-HOOK-SETTER=CONDENSER",
 	}
 	createContainerHook := []string{
 		strings.Join([]string{
-			"/usr/bin/curl", "-sS", "-X", "POST",
-			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
-			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: createContainer",
-			"--cacert", utils.PublicCertPath, "--cert", utils.ClientCertPath, "--key", utils.ClientKeyPath,
-			"--data-binary", "@-",
-			"https://" + hookAddr + ":7756/v1/hooks/droplet",
+			"/usr/bin/raind-hook",
+			"--url", "https://" + hookAddr + ":7756/v1/hooks/droplet",
+			"--event", "createContainer",
+			"--ca", utils.PublicCertPath,
+			"--cert", filepath.Join(utils.ContainerRootDir, containerId, "/cert/client.crt"),
+			"--key", filepath.Join(utils.ContainerRootDir, containerId, "/cert/client.key"),
 		}, ","),
+	}
+	createContainerHookEnv := []string{
+		"RAIND-HOOK-SETTER=CONDENSER",
 	}
 	poststartHook := []string{
 		strings.Join([]string{
-			"/usr/bin/curl", "-sS", "-X", "POST",
-			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
-			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: poststart",
-			"--cacert", utils.PublicCertPath, "--cert", utils.ClientCertPath, "--key", utils.ClientKeyPath,
-			"--data-binary", "@-",
-			"https://" + hookAddr + ":7756/v1/hooks/droplet",
+			"/usr/bin/raind-hook",
+			"--url", "https://" + hookAddr + ":7756/v1/hooks/droplet",
+			"--event", "poststart",
+			"--ca", utils.PublicCertPath,
+			"--cert", filepath.Join(utils.ContainerRootDir, containerId, "/cert/client.crt"),
+			"--key", filepath.Join(utils.ContainerRootDir, containerId, "/cert/client.key"),
 		}, ","),
+	}
+	poststartHookEnv := []string{
+		"RAIND-HOOK-SETTER=CONDENSER",
 	}
 	stopContainerHook := []string{
 		strings.Join([]string{
-			"/usr/bin/curl", "-sS", "-X", "POST",
-			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
-			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: stopContainer",
-			"--cacert", utils.PublicCertPath, "--cert", utils.ClientCertPath, "--key", utils.ClientKeyPath,
-			"--data-binary", "@-",
-			"https://" + hookAddr + ":7756/v1/hooks/droplet",
+			"/usr/bin/raind-hook",
+			"--url", "https://" + hookAddr + ":7756/v1/hooks/droplet",
+			"--event", "stopContainer",
+			"--ca", utils.PublicCertPath,
+			"--cert", filepath.Join(utils.ContainerRootDir, containerId, "/cert/client.crt"),
+			"--key", filepath.Join(utils.ContainerRootDir, containerId, "/cert/client.key"),
 		}, ","),
+	}
+	stopContainerHookEnv := []string{
+		"RAIND-HOOK-SETTER=CONDENSER",
 	}
 	poststopHook := []string{
 		strings.Join([]string{
-			"/usr/bin/curl", "-sS", "-X", "POST",
-			"--fail-with-body", "--connect-timeout", "1", "--max-time", "2",
-			"-H", "Content-Type: application/json", "-H", "X-Hook-Event: poststop",
-			"--cacert", utils.PublicCertPath, "--cert", utils.ClientCertPath, "--key", utils.ClientKeyPath,
-			"--data-binary", "@-",
-			"https://" + hookAddr + ":7756/v1/hooks/droplet",
+			"/usr/bin/raind-hook",
+			"--url", "https://" + hookAddr + ":7756/v1/hooks/droplet",
+			"--event", "poststop",
+			"--ca", utils.PublicCertPath,
+			"--cert", filepath.Join(utils.ContainerRootDir, containerId, "/cert/client.crt"),
+			"--key", filepath.Join(utils.ContainerRootDir, containerId, "/cert/client.key"),
 		}, ","),
+	}
+	poststopHookEnv := []string{
+		"RAIND-HOOK-SETTER=CONDENSER",
 	}
 
 	specParameter := runtime.SpecModel{
@@ -448,10 +473,15 @@ func (s *ContainerService) createContainerSpec(
 		UpperDir:               upperDir,
 		WorkDir:                workDir,
 		CreateRuntimeHook:      createRuntimeHook,
+		CreateRuntimeHookEnv:   createRuntimeHookEnv,
 		CreateContainerHook:    createContainerHook,
+		CreateContainerHookEnv: createContainerHookEnv,
 		PoststartHook:          poststartHook,
+		PoststartHookEnv:       poststartHookEnv,
 		StopContainerHook:      stopContainerHook,
+		StopContainerHookEnv:   stopContainerHookEnv,
 		PoststopHook:           poststopHook,
+		PoststopHookEnv:        poststopHookEnv,
 		Output:                 outputDir,
 	}
 

@@ -54,20 +54,38 @@ func (h *DropletHandler) Spec(specParameter runtime.SpecModel) error {
 	for _, v := range specParameter.CreateRuntimeHook {
 		args = slices.Concat(args, []string{"--hook-create-runtime", v})
 	}
+	for _, v := range specParameter.CreateRuntimeHookEnv {
+		args = slices.Concat(args, []string{"--hook-create-runtime-env", v})
+	}
 	for _, v := range specParameter.CreateContainerHook {
 		args = slices.Concat(args, []string{"--hook-create-container", v})
+	}
+	for _, v := range specParameter.CreateContainerHookEnv {
+		args = slices.Concat(args, []string{"--hook-create-container-env", v})
 	}
 	for _, v := range specParameter.StartContainerHook {
 		args = slices.Concat(args, []string{"--hook-start-container", v})
 	}
+	for _, v := range specParameter.StartContainerHookEnv {
+		args = slices.Concat(args, []string{"--hook-start-container-env", v})
+	}
 	for _, v := range specParameter.PoststartHook {
 		args = slices.Concat(args, []string{"--hook-poststart", v})
+	}
+	for _, v := range specParameter.PoststartHookEnv {
+		args = slices.Concat(args, []string{"--hook-poststart-env", v})
 	}
 	for _, v := range specParameter.StopContainerHook {
 		args = slices.Concat(args, []string{"--hook-stop-container", v})
 	}
+	for _, v := range specParameter.StopContainerHookEnv {
+		args = slices.Concat(args, []string{"--hook-stop-container-env", v})
+	}
 	for _, v := range specParameter.PoststopHook {
 		args = slices.Concat(args, []string{"--hook-poststop", v})
+	}
+	for _, v := range specParameter.PoststopHookEnv {
+		args = slices.Concat(args, []string{"--hook-poststop-env", v})
 	}
 
 	runtimeSpec := h.commandFactory.Command(runtimePath, args...)

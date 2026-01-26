@@ -59,8 +59,23 @@ func main() {
 		}
 	}()
 
+	// CA Server
+	caAddr := ":7757"
+	caRouter := httpapi.NewCARouter()
+	caSrv := &http.Server{
+		Addr:      caAddr,
+		Handler:   caRouter,
+		TLSConfig: tlsCfg,
+	}
+	go func() {
+		log.Printf("[*] ca server listening on %s", caAddr)
+		if err := caSrv.ListenAndServeTLS(utils.PublicCertPath, utils.PrivateKeyPath); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
 	// Swagger
-	swaggerAddr := ":7757"
+	swaggerAddr := ":7758"
 	swaggerRouter := httpapi.NewSwaggerRouter()
 	swaggerSrv := &http.Server{
 		Addr:    swaggerAddr,
