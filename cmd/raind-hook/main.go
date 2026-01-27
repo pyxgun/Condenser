@@ -118,6 +118,11 @@ func requestClientCertificate(body []byte, u *string, ca *string, cert *string, 
 			fmt.Fprintf(os.Stderr, "request cert: %v\n", err)
 			os.Exit(1)
 		}
+		// remove csr
+		if err := removeCsr(st); err != nil {
+			fmt.Fprintf(os.Stderr, "remove csr: %v\n", err)
+			os.Exit(1)
+		}
 	}
 	return nil
 }
@@ -224,6 +229,10 @@ func requestCert(st State, url string, ca string, cert string, key string) error
 		return err
 	}
 	return nil
+}
+
+func removeCsr(st State) error {
+	return os.Remove("/etc/raind/container/" + st.ContainerId + "/cert/req.csr")
 }
 
 func buildCsrWithUriSAN(key *rsa.PrivateKey, cn string, spiffe string) ([]byte, error) {

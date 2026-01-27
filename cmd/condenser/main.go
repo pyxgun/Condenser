@@ -60,7 +60,7 @@ func main() {
 	}()
 
 	// CA Server
-	caAddr := ":7757"
+	caAddr := "127.0.0.1:7757"
 	caRouter := httpapi.NewCARouter()
 	caSrv := &http.Server{
 		Addr:      caAddr,

@@ -151,6 +151,7 @@ func (m *BootstrapManager) enableCgroupControllers() error {
 	controllers := []string{
 		"cpu",
 		"memory",
+		"pids",
 	}
 	for _, c := range controllers {
 		if enabled[c] {
