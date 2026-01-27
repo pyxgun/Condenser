@@ -6,6 +6,7 @@ import (
 	"condenser/internal/store/npm"
 	"condenser/internal/utils"
 	"fmt"
+	"strings"
 )
 
 func NewwServicePolicy() *ServicePolicy {
@@ -96,15 +97,19 @@ func (s *ServicePolicy) RemoveUserPolicy(param ServiceRemovePolicyModel) error {
 
 func (s *ServicePolicy) CommitPolicy() error {
 	// re-build using current policy setting
-	// 1. predefined policyy
+	// 1. fix ns mode
+	if err := s.FixNSMode(); err != nil {
+		return err
+	}
+	// 2. predefined policyy
 	if err := s.BuildPredefinedPolicy(); err != nil {
 		return err
 	}
-	// 2. user policy
+	// 3. user policy
 	if err := s.BuildUserPolicy(); err != nil {
 		return err
 	}
-	// 3. baclup
+	// 4. baclup
 	if err := s.npmStoreHandler.Backup(); err != nil {
 		return err
 	}
@@ -207,11 +212,14 @@ func (s *ServicePolicy) ChangeNSMode(mode string) error {
 	if mode != "enforce" && mode != "observe" {
 		return fmt.Errorf("invalid mode: %s", mode)
 	}
-	if err := s.npmHandler.ChangeNSMode(mode); err != nil {
-		return err
+	// check current mode
+	current := s.npmHandler.GetNSMode()
+	if current == mode {
+		return fmt.Errorf("NS Mode already set in: %s", current)
 	}
-	// commit
-	if err := s.CommitPolicy(); err != nil {
+	// set next commit flag
+	mode = mode + "_next_commit"
+	if err := s.npmHandler.ChangeNSMode(mode); err != nil {
 		return err
 	}
 	return nil
@@ -239,6 +247,20 @@ func (s *ServicePolicy) resolveContainerNameAndInfo(str string) (string, string)
 		}
 	}
 	return containerId, containerName
+}
+
+func (s *ServicePolicy) FixNSMode() error {
+	current := s.npmHandler.GetNSMode()
+	if current == "observe" || current == "enforce" {
+		return nil
+	}
+	if strings.Contains(current, "_next_commit") {
+		mode := strings.Split(current, "_")[0]
+		if err := s.npmHandler.ChangeNSMode(mode); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *ServicePolicy) BuildPredefinedPolicy() error {
