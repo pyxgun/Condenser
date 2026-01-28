@@ -350,7 +350,7 @@ func (s *ContainerService) createContainerSpec(
 	hookAddr = strings.Split(hookAddr, "/")[0]
 	createRuntimeHook := []string{
 		strings.Join([]string{
-			"/usr/bin/condenser-hook-agent",
+			"/usr/local/bin/condenser-hook-agent",
 			"--url", "https://localhost:7757/v1/pki/sign",
 			"--event", "requestCert",
 			"--ca", utils.PublicCertPath,
@@ -358,7 +358,7 @@ func (s *ContainerService) createContainerSpec(
 			"--key", utils.HookClientKeyPath,
 		}, ","),
 		strings.Join([]string{
-			"/usr/bin/condenser-hook-agent",
+			"/usr/local/bin/condenser-hook-agent",
 			"--url", "https://" + hookAddr + ":7756/v1/hooks/droplet",
 			"--event", "createRuntime",
 			"--ca", utils.PublicCertPath,
@@ -372,7 +372,7 @@ func (s *ContainerService) createContainerSpec(
 	}
 	createContainerHook := []string{
 		strings.Join([]string{
-			"/usr/bin/condenser-hook-agent",
+			"/usr/local/bin/condenser-hook-agent",
 			"--url", "https://" + hookAddr + ":7756/v1/hooks/droplet",
 			"--event", "createContainer",
 			"--ca", utils.PublicCertPath,
@@ -385,7 +385,7 @@ func (s *ContainerService) createContainerSpec(
 	}
 	poststartHook := []string{
 		strings.Join([]string{
-			"/usr/bin/condenser-hook-agent",
+			"/usr/local/bin/condenser-hook-agent",
 			"--url", "https://" + hookAddr + ":7756/v1/hooks/droplet",
 			"--event", "poststart",
 			"--ca", utils.PublicCertPath,
@@ -398,7 +398,7 @@ func (s *ContainerService) createContainerSpec(
 	}
 	stopContainerHook := []string{
 		strings.Join([]string{
-			"/usr/bin/condenser-hook-agent",
+			"/usr/local/bin/condenser-hook-agent",
 			"--url", "https://" + hookAddr + ":7756/v1/hooks/droplet",
 			"--event", "stopContainer",
 			"--ca", utils.PublicCertPath,
@@ -411,7 +411,7 @@ func (s *ContainerService) createContainerSpec(
 	}
 	poststopHook := []string{
 		strings.Join([]string{
-			"/usr/bin/condenser-hook-agent",
+			"/usr/local/bin/condenser-hook-agent",
 			"--url", "https://" + hookAddr + ":7756/v1/hooks/droplet",
 			"--event", "poststop",
 			"--ca", utils.PublicCertPath,
