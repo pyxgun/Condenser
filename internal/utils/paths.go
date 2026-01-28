@@ -26,5 +26,7 @@ const (
 	HookClientCertPath     = "/etc/raind/cert/raindHookClient.crt"
 	HookClientKeyPath      = "/etc/raind/cert/raindHookClient.key"
 
-	AuditLogPath = "/etc/raind/log/condenser_audit.log"
+	AuditLogPath    = "/etc/raind/log/raind_audit.log"
+	UlogPath        = "/var/log/ulog/raind.jsonl"
+	EnrichedLogPath = "/var/log/raind/netflow.jsonl"
 )

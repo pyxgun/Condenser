@@ -16,9 +16,15 @@ type Endpoint struct {
 	Veth          string `json:"veth,omitempty"`
 }
 
+type Policy struct {
+	Source string `json:"source"`
+	Id     string `json:"id,omitempty"`
+}
+
 type Enriched struct {
 	GeneratedTS string         `json:"generated_ts"`
 	ReceivedTS  string         `json:"received_ts"`
+	Policy      Policy         `json:"policy"`
 	Kind        string         `json:"kind"`
 	Verdict     string         `json:"verdict"`
 	Proto       string         `json:"proto"`

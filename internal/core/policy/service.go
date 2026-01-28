@@ -416,7 +416,7 @@ func (s *ServicePolicy) buildRaindEWChain(networkList []ipam.NetworkList, nflog 
 					InputDev:        n.Interface,
 					OutputDev:       n.Interface,
 					NflogGroup:      10,
-					NflogPrefix:     "RAIND-EW-DENY",
+					NflogPrefix:     "RAIND-EW-DENY,id=predefined",
 				},
 				"NFLOG",
 			); err != nil {
@@ -469,7 +469,7 @@ func (s *ServicePolicy) buildRaindNSObserveChain(networkList []ipam.NetworkList,
 					InputDev:    n.Interface,
 					OutputDev:   hostInterface,
 					NflogGroup:  11,
-					NflogPrefix: "RAIND-NS-OBS",
+					NflogPrefix: "RAIND-NS-ALLOW,id=predefined",
 				},
 				"NFLOG",
 			); err != nil {
@@ -522,7 +522,7 @@ func (s *ServicePolicy) buildRaindNSEnforceChain(networkList []ipam.NetworkList,
 					InputDev:    n.Interface,
 					OutputDev:   hostInterface,
 					NflogGroup:  12,
-					NflogPrefix: "RAIND-NS-ENF",
+					NflogPrefix: "RAIND-NS-DENY,id=predefined",
 				},
 				"NFLOG",
 			); err != nil {
@@ -559,24 +559,29 @@ func (s *ServicePolicy) buildRaindNSEnforceChain(networkList []ipam.NetworkList,
 
 func (s *ServicePolicy) BuildUserPolicy() error {
 	var err error = nil
+	loggingEw := s.npmHandler.GetEWLogging()
+	loggingNs := s.npmHandler.GetNSLogging()
+
 	// 1. add RAIND-EW user policy
 	ewPolicies := s.npmHandler.GetEWPolicyList()
-	err = s.insertRaindEWUserPolicy(ewPolicies)
+	err = s.insertRaindEWUserPolicy(ewPolicies, loggingEw)
 
 	// 2. add RAIND-NS-OBS user policy
 	nsObsPolicies := s.npmHandler.GetNSObsPolicyList()
-	err = s.insertRaindNSUserPolicy("RAIND-NS-OBS", nsObsPolicies)
+	err = s.insertRaindNSUserPolicy("RAIND-NS-OBS", nsObsPolicies, loggingNs)
 
 	// 3. add RAIND-NS-ENF user policy
 	nsEnfPolicies := s.npmHandler.GetNSEnfPolicyList()
-	err = s.insertRaindNSUserPolicy("RAIND-NS-ENF", nsEnfPolicies)
+	err = s.insertRaindNSUserPolicy("RAIND-NS-ENF", nsEnfPolicies, loggingNs)
 
 	return err
 }
 
-func (s *ServicePolicy) insertRaindEWUserPolicy(policies []npm.Policy) error {
+func (s *ServicePolicy) insertRaindEWUserPolicy(policies []npm.Policy, logging bool) error {
 	chainName := "RAIND-EW"
 	for _, p := range policies {
+		policyId := p.Id
+
 		// check remove flag
 		//   if status is "remove_next_commit", remove policy from store and not apply the policy
 		if p.Status == "remove_next_commit" {
@@ -633,6 +638,27 @@ func (s *ServicePolicy) insertRaindEWUserPolicy(policies []npm.Policy) error {
 		); err != nil {
 			continue
 		}
+		if logging {
+			if err := s.iptablesHandler.InsertRuleToChain(
+				chainName,
+				RuleModel{
+					Conntrack:       true,
+					Ctstate:         []string{"NEW"},
+					Physdev:         true,
+					PhysdevIsBridge: true,
+					InputPhysdev:    srcVeth,
+					OutputPhysdev:   dstVeth,
+					Protocol:        p.Protocol,
+					DestPort:        p.DestPort,
+					NflogGroup:      10,
+					NflogPrefix:     "RAIND-EW-ALLOW,id=" + policyId,
+				},
+				"NFLOG",
+			); err != nil {
+				continue
+			}
+		}
+
 		// set status: applied
 		if err := s.npmHandler.UpdateStatus(
 			chainName,
@@ -647,8 +673,10 @@ func (s *ServicePolicy) insertRaindEWUserPolicy(policies []npm.Policy) error {
 	return nil
 }
 
-func (s *ServicePolicy) insertRaindNSUserPolicy(chainName string, policies []npm.Policy) error {
+func (s *ServicePolicy) insertRaindNSUserPolicy(chainName string, policies []npm.Policy, logging bool) error {
 	for _, p := range policies {
+		policyId := p.Id
+
 		// check remove flag
 		//   if status is "remove_next_commit", remove policy from store and not apply the policy
 		if p.Status == "remove_next_commit" {
@@ -698,6 +726,38 @@ func (s *ServicePolicy) insertRaindNSUserPolicy(chainName string, policies []npm
 			action,
 		); err != nil {
 			continue
+		}
+
+		if logging {
+			var (
+				nflogGroup  int
+				nflogPrefix string
+			)
+			if chainName == "RAIND-NS-OBS" {
+				nflogGroup = 11
+				nflogPrefix = "RAIND-NS-DENY,id=" + policyId
+			} else {
+				nflogGroup = 12
+				nflogPrefix = "RAIND-NS-ALLOW,id=" + policyId
+			}
+			if err := s.iptablesHandler.InsertRuleToChain(
+				chainName,
+				RuleModel{
+					Conntrack:   true,
+					Ctstate:     []string{"NEW"},
+					InputDev:    bridgeDev,
+					Source:      srcAddress,
+					OutputDev:   dstDev,
+					Destination: p.Destination.Address,
+					Protocol:    p.Protocol,
+					DestPort:    p.DestPort,
+					NflogGroup:  nflogGroup,
+					NflogPrefix: nflogPrefix,
+				},
+				"NFLOG",
+			); err != nil {
+				continue
+			}
 		}
 		// set status: applied
 		if err := s.npmHandler.UpdateStatus(

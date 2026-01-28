@@ -44,7 +44,7 @@ func (h *EnrichedLogHandler) EnrichedLogger() {
 
 	enricher := &Enricher{
 		RuntimeSubnet: subnet,
-		OutPath:       "/var/log/condenser/netflow.jsonl",
+		OutPath:       utils.EnrichedLogPath,
 		csmHandler:    csm.NewCsmManager(csm.NewCsmStore(utils.CsmStorePath)),
 		ipamHandler:   ipam.NewIpamManager(ipam.NewIpamStore(utils.IpamStorePath)),
 	}
@@ -57,7 +57,7 @@ func (h *EnrichedLogHandler) EnrichedLogger() {
 	defer cancel()
 
 	tailer := &Tailer{
-		Path:         "/var/log/ulog/raind.json",
+		Path:         utils.UlogPath,
 		PollInterval: 500 * time.Millisecond,
 	}
 
@@ -299,7 +299,14 @@ func (e *Enricher) enrich(rr RawRecord, rawLine []byte) Enriched {
 	proto := ipProtoToName(ipProto, rr)
 
 	rawHash := sha256.Sum256(rawLine)
-	kind, verdict := classify(prefix)
+	kind, verdict, policyId := classify(prefix)
+	var policy Policy
+	if policyId == "predefined" {
+		policy.Source = "predefined"
+	} else {
+		policy.Source = "user"
+		policy.Id = policyId
+	}
 
 	src := Endpoint{
 		Kind: "unknown",
@@ -347,6 +354,7 @@ func (e *Enricher) enrich(rr RawRecord, rawLine []byte) Enriched {
 	out := Enriched{
 		GeneratedTS: genTs,
 		ReceivedTS:  now,
+		Policy:      policy,
 		Kind:        kind,
 		Verdict:     verdict,
 		Proto:       proto,
@@ -424,17 +432,21 @@ func ipProtoToName(ipProto int, rr RawRecord) string {
 	}
 }
 
-func classify(prefix string) (kind string, verdict string) {
-	// prefix: "RAIND-EW-DENY" "RAIND-NS-OBS" "RAIND-NS-DENY"
+func classify(prefix string) (kind string, verdict string, policyId string) {
+	parts := strings.SplitN(prefix, ",", 2)
+	id := strings.SplitN(parts[1], "=", 2)[1]
+
 	p := strings.ToUpper(prefix)
 	switch {
+	case strings.Contains(p, "EW") && strings.Contains(p, "ALLOW"):
+		return "east-west", "allow", id
 	case strings.Contains(p, "EW") && strings.Contains(p, "DENY"):
-		return "ew_deny", "deny"
-	case strings.Contains(p, "NS") && (strings.Contains(p, "OBS") || strings.Contains(p, "OBSERVE")):
-		return "ns_observe", "observe"
+		return "east-west", "deny", id
+	case strings.Contains(p, "NS") && strings.Contains(p, "ALLOW"):
+		return "north-south", "allow", id
 	case strings.Contains(p, "NS") && strings.Contains(p, "DENY"):
-		return "ns_deny", "deny"
+		return "north-south", "deny", id
 	default:
-		return "unknown", "unknown"
+		return "unknown", "unknown", "unknown"
 	}
 }
