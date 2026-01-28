@@ -10,8 +10,8 @@ swag init -g cmd/condenser/main.go
 go build -o $BINDIR/$BINNAME $MAINDIR
 sudo cp $BINDIR/$BINNAME /usr/bin
 
-HOOKMAINDIR=./cmd/raind-hook
-HOOKBINNAME=raind-hook
+HOOKMAINDIR=./cmd/condenser-hook
+HOOKBINNAME=condenser-hook-agent
 
 # hook
 go build -o $BINDIR/$HOOKBINNAME $HOOKMAINDIR
