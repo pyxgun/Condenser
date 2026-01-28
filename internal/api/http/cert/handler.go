@@ -1,8 +1,9 @@
 package cert
 
 import (
+	"condenser/internal/api/http/logs"
 	apimodel "condenser/internal/api/http/utils"
-	"condenser/internal/cert"
+	"condenser/internal/core/cert"
 	"condenser/internal/utils"
 	"crypto/rsa"
 	"crypto/x509"
@@ -64,6 +65,13 @@ func (h *RequestHandler) SignCSRHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// set log: target
+	logs.SetTarget(r.Context(), logs.Target{
+		CommonName: csr.Subject.CommonName,
+		SANURIs:    csr.URIs,
+	})
+
+	// issue client serr
 	certDer, err := h.certHandler.IssueClientCertFromCSR(csr, ca.Cert, ca.Key, spiffeId, id, 365*24*time.Hour)
 	if err != nil {
 		apimodel.RespondFail(w, http.StatusInternalServerError, "issue cert: "+err.Error(), nil)

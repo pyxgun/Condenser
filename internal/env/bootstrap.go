@@ -2,7 +2,7 @@ package env
 
 import (
 	"bufio"
-	"condenser/internal/cert"
+	"condenser/internal/core/cert"
 	"condenser/internal/core/network"
 	"condenser/internal/core/policy"
 	"condenser/internal/lsm"
@@ -151,6 +151,7 @@ func (m *BootstrapManager) enableCgroupControllers() error {
 	controllers := []string{
 		"cpu",
 		"memory",
+		"pids",
 	}
 	for _, c := range controllers {
 		if enabled[c] {

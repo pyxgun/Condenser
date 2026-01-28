@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"condenser/internal/api/http/logs"
 	"condenser/internal/store/csm"
 	"condenser/internal/utils"
 	"context"
@@ -77,6 +78,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("container: %s not found", containerId), http.StatusBadRequest)
 		return
 	}
+
+	// set log: target
+	log_containerId, log_containerName, _ := h.csmHandler.GetContainerIdAndName(containerId)
+	logs.SetTarget(r.Context(), logs.Target{
+		ContainerId:   log_containerId,
+		ContainerName: log_containerName,
+	})
 
 	up := h.Upgrader
 	if up.CheckOrigin == nil {

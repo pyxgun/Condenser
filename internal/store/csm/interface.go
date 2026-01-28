@@ -13,6 +13,7 @@ type CsmHandler interface {
 	IsNameAlreadyUsed(name string) bool
 	GetContainerIdByName(name string) (string, error)
 	GetContainerNameById(containerId string) (string, error)
+	GetContainerIdAndName(str string) (id, name string, err error)
 	ResolveContainerId(str string) (string, error)
 	IsContainerExist(str string) bool
 }

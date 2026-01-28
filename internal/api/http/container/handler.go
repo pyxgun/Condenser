@@ -2,21 +2,26 @@ package container
 
 import (
 	"condenser/internal/core/container"
+	"condenser/internal/store/csm"
+	"condenser/internal/utils"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
+	"condenser/internal/api/http/logs"
 	apimodel "condenser/internal/api/http/utils"
 )
 
 func NewRequestHandler() *RequestHandler {
 	return &RequestHandler{
 		serviceHandler: container.NewContaierService(),
+		csmHandler:     csm.NewCsmManager(csm.NewCsmStore(utils.CsmStorePath)),
 	}
 }
 
 type RequestHandler struct {
 	serviceHandler container.ContainerServiceHandler
+	csmHandler     csm.CsmHandler
 }
 
 // CreateContainer godoc
@@ -35,6 +40,17 @@ func (h *RequestHandler) CreateContainer(w http.ResponseWriter, r *http.Request)
 		apimodel.RespondFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), CreateContainerResponse{Id: ""})
 		return
 	}
+
+	// set log: target
+	logs.SetTarget(r.Context(), logs.Target{
+		ContainerName: req.Name,
+		ImageRef:      req.Image,
+		Command:       req.Command,
+		Port:          req.Port,
+		Mount:         req.Mount,
+		Network:       req.Network,
+		Tty:           req.Tty,
+	})
 
 	// service: create
 	result, err := h.serviceHandler.Create(
@@ -79,6 +95,14 @@ func (h *RequestHandler) StartContainer(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// set log: target
+	log_containerId, log_containerName, _ := h.csmHandler.GetContainerIdAndName(containerId)
+	logs.SetTarget(r.Context(), logs.Target{
+		ContainerId:   log_containerId,
+		ContainerName: log_containerName,
+		Tty:           req.Tty,
+	})
+
 	// service: start
 	result, err := h.serviceHandler.Start(
 		container.ServiceStartModel{
@@ -108,6 +132,13 @@ func (h *RequestHandler) StopContainer(w http.ResponseWriter, r *http.Request) {
 		apimodel.RespondFail(w, http.StatusBadRequest, "missing containerId", StopContainerResponse{Id: ""})
 		return
 	}
+
+	// set log: target
+	log_containerId, log_containerName, _ := h.csmHandler.GetContainerIdAndName(containerId)
+	logs.SetTarget(r.Context(), logs.Target{
+		ContainerId:   log_containerId,
+		ContainerName: log_containerName,
+	})
 
 	// service: stop
 	result, err := h.serviceHandler.Stop(
@@ -146,6 +177,15 @@ func (h *RequestHandler) ExecContainer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// set log: target
+	log_containerId, log_containerName, _ := h.csmHandler.GetContainerIdAndName(containerId)
+	logs.SetTarget(r.Context(), logs.Target{
+		ContainerId:   log_containerId,
+		ContainerName: log_containerName,
+		Command:       req.Command,
+		Tty:           req.Tty,
+	})
+
 	// service: exec
 	err := h.serviceHandler.Exec(container.ServiceExecModel{
 		ContainerId: containerId,
@@ -173,6 +213,13 @@ func (h *RequestHandler) DeleteContainer(w http.ResponseWriter, r *http.Request)
 		apimodel.RespondFail(w, http.StatusBadRequest, "missing containerId", DeleteContainerResponse{Id: ""})
 		return
 	}
+
+	// set log: target
+	log_containerId, log_containerName, _ := h.csmHandler.GetContainerIdAndName(containerId)
+	logs.SetTarget(r.Context(), logs.Target{
+		ContainerId:   log_containerId,
+		ContainerName: log_containerName,
+	})
 
 	// service: delete
 	result, err := h.serviceHandler.Delete(
@@ -220,6 +267,13 @@ func (h *RequestHandler) GetContainerById(w http.ResponseWriter, r *http.Request
 		apimodel.RespondFail(w, http.StatusBadRequest, "missing container Id", StartContainerResponse{Id: ""})
 		return
 	}
+
+	// set log: target
+	log_containerId, log_containerName, _ := h.csmHandler.GetContainerIdAndName(containerId)
+	logs.SetTarget(r.Context(), logs.Target{
+		ContainerId:   log_containerId,
+		ContainerName: log_containerName,
+	})
 
 	// service: get container by id
 	containerInfo, err := h.serviceHandler.GetContainerById(containerId)

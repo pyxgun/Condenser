@@ -142,6 +142,18 @@ func (m *CsmManager) GetContainerNameById(containerId string) (string, error) {
 	return containerName, err
 }
 
+func (m *CsmManager) GetContainerIdAndName(str string) (id, name string, err error) {
+	containerId, getNameErr := m.GetContainerIdByName(str)
+	containerName, getIdErr := m.GetContainerNameById(str)
+	if getNameErr == nil {
+		return containerId, str, nil
+	}
+	if getIdErr == nil {
+		return str, containerName, nil
+	}
+	return "", "", fmt.Errorf("container: %s not found", str)
+}
+
 func (m *CsmManager) ResolveContainerId(str string) (string, error) {
 	var containerId string
 	// 1. resolve container id by name

@@ -4,6 +4,7 @@ import (
 	"condenser/internal/core/policy"
 	"net/http"
 
+	"condenser/internal/api/http/logs"
 	apimodel "condenser/internal/api/http/utils"
 
 	"github.com/go-chi/chi/v5"
@@ -35,6 +36,16 @@ func (h *RequestHandler) AddPolicy(w http.ResponseWriter, r *http.Request) {
 		apimodel.RespondFail(w, http.StatusBadRequest, "invalid json: "+err.Error(), req)
 		return
 	}
+
+	// set log: target
+	logs.SetTarget(r.Context(), logs.Target{
+		ChainName:   req.ChainName,
+		Source:      req.Source,
+		Destination: req.Destination,
+		Protocol:    req.Protocol,
+		DestPort:    req.DestPort,
+		Comment:     req.Comment,
+	})
 
 	// service: add policy
 	policyId, err := h.policyServiceHandler.AddUserPolicy(
@@ -69,6 +80,11 @@ func (h *RequestHandler) RemovePolicy(w http.ResponseWriter, r *http.Request) {
 		apimodel.RespondFail(w, http.StatusBadRequest, "missing policy Id", nil)
 		return
 	}
+
+	// set log: target
+	logs.SetTarget(r.Context(), logs.Target{
+		PolicyId: policyId,
+	})
 
 	// service: remove policy
 	err := h.policyServiceHandler.RemoveUserPolicy(

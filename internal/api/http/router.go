@@ -2,15 +2,19 @@ package http
 
 import (
 	_ "condenser/docs"
+	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	certHandler "condenser/internal/api/http/cert"
 	containerHandler "condenser/internal/api/http/container"
 	hookHandler "condenser/internal/api/http/hook"
 	imageHandler "condenser/internal/api/http/image"
+	"condenser/internal/api/http/logs"
 	policyHandler "condenser/internal/api/http/policy"
 	websocketHandler "condenser/internal/api/http/websocket"
+	"condenser/internal/utils"
 
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
@@ -50,7 +54,15 @@ func NewApiRouter() *chi.Mux {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	// SPIFFE
 	r.Use(RequireSPIFFE("spiffe://raind/cli/"))
+	// LOGGER
+	node, _ := os.Hostname()
+	r.Use(logs.LoggerMiddleware(
+		logs.JsonLineLogger{Out: openAuditLog()},
+		"condenser",
+		node,
+	))
 
 	// == v1 ==
 	// == containers ==
@@ -90,7 +102,15 @@ func NewHookRouter() *chi.Mux {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	// SPIFFE
 	r.Use(RequireSPIFFE("spiffe://raind/hook"))
+	// LOGGER
+	node, _ := os.Hostname()
+	r.Use(logs.LoggerMiddleware(
+		logs.JsonLineLogger{Out: openAuditLog()},
+		"condenser",
+		node,
+	))
 
 	// == hook ==
 	r.Post("/v1/hooks/droplet", hookHandler.ApplyHook)
@@ -106,7 +126,15 @@ func NewCARouter() *chi.Mux {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	// SPIFFE
 	r.Use(RequireSPIFFE("spiffe://raind/droplet/"))
+	// LOGGER
+	node, _ := os.Hostname()
+	r.Use(logs.LoggerMiddleware(
+		logs.JsonLineLogger{Out: openAuditLog()},
+		"condenser",
+		node,
+	))
 
 	// == CA ==
 	r.Post("/v1/pki/sign", certHandler.SignCSRHandler)
@@ -131,4 +159,12 @@ func RequireSPIFFE(prefix string) func(http.Handler) http.Handler {
 			http.Error(w, "forbidden", http.StatusForbidden)
 		})
 	}
+}
+
+func openAuditLog() *os.File {
+	fd, err := os.OpenFile(utils.AuditLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0640)
+	if err != nil {
+		log.Fatal("open audit log file failed")
+	}
+	return fd
 }
