@@ -9,6 +9,10 @@ definitions:
         items:
           type: string
         type: array
+      env:
+        items:
+          type: string
+        type: array
       image:
         example: alpine:latest
         type: string

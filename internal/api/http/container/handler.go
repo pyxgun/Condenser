@@ -59,6 +59,7 @@ func (h *RequestHandler) CreateContainer(w http.ResponseWriter, r *http.Request)
 			Command: req.Command,
 			Port:    req.Port,
 			Mount:   req.Mount,
+			Env:     req.Env,
 			Network: req.Network,
 			Tty:     req.Tty,
 			Name:    req.Name,

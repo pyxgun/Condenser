@@ -319,7 +319,12 @@ func (s *ContainerService) createContainerSpec(
 	hostname := containerId
 
 	// env
+	// image predefined env
 	envs := imageConfig.Config.Env
+	// user specified env
+	for _, ue := range createParameter.Env {
+		envs = append(envs, ue)
+	}
 
 	// mount
 	mount := createParameter.Mount

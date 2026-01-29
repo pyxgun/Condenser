@@ -496,6 +496,12 @@ const docTemplate = `{
                         "echo hello; sleep 60"
                     ]
                 },
+                "env": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "image": {
                     "type": "string",
                     "example": "alpine:latest"
