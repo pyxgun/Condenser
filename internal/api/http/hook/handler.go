@@ -105,7 +105,7 @@ func (h *RequestHandler) validateSpiffe(r *http.Request, state hook.ServiceState
 		// retrieve container id
 		path := strings.TrimPrefix(u.Path, "/")
 		parts := strings.Split(path, "/")
-		if len(parts) != 2 || parts[0] != "hook" {
+		if len(parts) != 2 || parts[0] != "container" {
 			return false, fmt.Errorf("invalid spiffe path: %s", path)
 		}
 		containerId := parts[1]

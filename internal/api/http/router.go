@@ -103,7 +103,7 @@ func NewHookRouter() *chi.Mux {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	// SPIFFE
-	r.Use(RequireSPIFFE("spiffe://raind/hook"))
+	r.Use(RequireSPIFFE("spiffe://raind/container"))
 	// LOGGER
 	node, _ := os.Hostname()
 	r.Use(logs.LoggerMiddleware(

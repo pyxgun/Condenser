@@ -35,13 +35,15 @@ func (s *ContainerService) Create(createParameter ServiceCreateModel) (id string
 
 	// RollbackFlag for handling rollback handling when process is not completed successfuly
 	var rollbackFlag RollbackFlag
-	defer func() {
-		if err != nil {
-			if rbErr := s.rollback(rollbackFlag, containerId); rbErr != nil {
-				err = rbErr
+	/*
+		defer func() {
+			if err != nil {
+				if rbErr := s.rollback(rollbackFlag, containerId); rbErr != nil {
+					err = rbErr
+				}
 			}
-		}
-	}()
+		}()
+	*/
 
 	// 2. check if the requested image exist
 	imageRepo, imageRef, err := s.parseImageRef(createParameter.Image)

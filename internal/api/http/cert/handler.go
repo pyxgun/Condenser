@@ -56,7 +56,7 @@ func (h *RequestHandler) SignCSRHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	switch role {
-	case "hook":
+	case "container;":
 	default:
 		apimodel.RespondFail(w, http.StatusForbidden, "role not allowed", nil)
 		return

@@ -250,7 +250,7 @@ func (m *CertManager) IssueClientCertFromCSR(
 	// validate container id
 	path := strings.TrimPrefix(spiffe.Path, "/")
 	parts := strings.Split(path, "/")
-	if len(parts) != 2 || parts[0] != "hook" {
+	if len(parts) != 2 || parts[0] != "container" {
 		return nil, "", "", fmt.Errorf("invalid SPIFFE ID format")
 	}
 	containerId := parts[1]
@@ -276,7 +276,7 @@ func (m *CertManager) IssueClientCertFromCSR(
 	newSpiffeId := url.URL{
 		Scheme: "spiffe",
 		Host:   "raind",
-		Path:   "hook/" + containerInfo.ContainerId,
+		Path:   "container/" + containerInfo.ContainerId,
 	}
 
 	template := &x509.Certificate{
