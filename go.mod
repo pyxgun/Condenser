@@ -4,6 +4,7 @@ go 1.22.2
 
 require (
 	al.essio.dev/pkg/shellescape v1.6.0
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-chi/chi v1.5.5
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/google/uuid v1.6.0

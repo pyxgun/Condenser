@@ -8,12 +8,14 @@ type CsmHandler interface {
 	StoreContainer(containerId string, state string, pid int, repo, ref string, command []string, name string) error
 	RemoveContainer(containerId string) error
 	UpdateContainer(containerId string, state string, pid int) error
+	UpdateSpiffe(containerId string, spiffe string) error
 	GetContainerList() ([]ContainerInfo, error)
 	GetContainerById(containerId string) (ContainerInfo, error)
 	IsNameAlreadyUsed(name string) bool
 	GetContainerIdByName(name string) (string, error)
 	GetContainerNameById(containerId string) (string, error)
 	GetContainerIdAndName(str string) (id, name string, err error)
+	GetSpiffeById(containerId string) (string, error)
 	ResolveContainerId(str string) (string, error)
 	IsContainerExist(str string) bool
 }

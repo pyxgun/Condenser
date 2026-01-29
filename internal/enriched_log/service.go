@@ -13,14 +13,113 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
 )
+
+func NewResolver(ipamHandler ipam.IpamHandler, csmHandler csm.CsmHandler) *Resolver {
+	resolver := &Resolver{
+		ResolveMap:  map[string]ContainerMeta{},
+		ipamHandler: ipamHandler,
+		csmHandler:  csmHandler,
+	}
+	pool, _ := ipamHandler.GetPoolList()
+	for _, p := range pool {
+		for addr, info := range p.Allocations {
+			if _, ok := resolver.ResolveMap[addr]; !ok {
+				containerName, _ := csmHandler.GetContainerNameById(info.ContainerId)
+				spiffeId, _ := csmHandler.GetSpiffeById(info.ContainerId)
+				resolver.ResolveMap[addr] = ContainerMeta{
+					ContainerId:   info.ContainerId,
+					ContainerName: containerName,
+					Ipv4:          addr,
+					Veth:          info.Interface,
+					SpiffeId:      spiffeId,
+				}
+			}
+		}
+	}
+	return resolver
+}
+
+type Resolver struct {
+	ResolveMap  map[string]ContainerMeta
+	ipamHandler ipam.IpamHandler
+	csmHandler  csm.CsmHandler
+}
+
+func (r *Resolver) Refresh() {
+	r.ResolveMap = map[string]ContainerMeta{}
+	pool, _ := r.ipamHandler.GetPoolList()
+	for _, p := range pool {
+		for addr, info := range p.Allocations {
+			if _, ok := r.ResolveMap[addr]; !ok {
+				containerName, err := r.csmHandler.GetContainerNameById(info.ContainerId)
+				if err != nil {
+					continue
+				}
+				spiffeId, _ := r.csmHandler.GetSpiffeById(info.ContainerId)
+				r.ResolveMap[addr] = ContainerMeta{
+					ContainerId:   info.ContainerId,
+					ContainerName: containerName,
+					Ipv4:          addr,
+					Veth:          info.Interface,
+					SpiffeId:      spiffeId,
+				}
+			}
+		}
+	}
+}
+
+func (r *Resolver) Watch(ctx context.Context) error {
+	w, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+
+	dir := filepath.Dir(utils.CsmStorePath)
+	base := filepath.Base(utils.CsmStorePath)
+
+	if err := w.Add(dir); err != nil {
+		return err
+	}
+
+	var pending atomic.Bool
+	trigger := func() {
+		if pending.CompareAndSwap(false, true) {
+			go func() {
+				time.Sleep(50 * time.Millisecond)
+				r.Refresh()
+				pending.Store(false)
+			}()
+		}
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case ev := <-w.Events:
+			if filepath.Base(ev.Name) != base {
+				continue
+			}
+			if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename) != 0 {
+				trigger()
+			}
+		case <-w.Errors:
+		}
+	}
+}
 
 func NewEnrichedLogHandler() *EnrichedLogHandler {
 	return &EnrichedLogHandler{
@@ -42,11 +141,24 @@ func (h *EnrichedLogHandler) EnrichedLogger() {
 		panic(err)
 	}
 
+	resolver := NewResolver(
+		ipam.NewIpamManager(ipam.NewIpamStore(utils.IpamStorePath)),
+		csm.NewCsmManager(csm.NewCsmStore(utils.CsmStorePath)),
+	)
+
+	// start resolver watch
+	go func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		if err := resolver.Watch(ctx); err != nil {
+			log.Printf("watch stopped: %v", err)
+		}
+	}()
+
 	enricher := &Enricher{
 		RuntimeSubnet: subnet,
 		OutPath:       utils.EnrichedLogPath,
-		csmHandler:    csm.NewCsmManager(csm.NewCsmStore(utils.CsmStorePath)),
-		ipamHandler:   ipam.NewIpamManager(ipam.NewIpamStore(utils.IpamStorePath)),
+		Resolver:      resolver,
 	}
 	if err := enricher.OpenOutput(); err != nil {
 		panic(err)
@@ -231,13 +343,11 @@ func getInode(fi os.FileInfo) uint64 {
 type Enricher struct {
 	RuntimeSubnet *net.IPNet
 	OutPath       string
+	Resolver      *Resolver
 
 	muOut sync.Mutex
 	out   *os.File
 	bw    *bufio.Writer
-
-	ipamHandler ipam.IpamHandler
-	csmHandler  csm.CsmHandler
 }
 
 func (e *Enricher) OpenOutput() error {
@@ -325,13 +435,11 @@ func (e *Enricher) enrich(rr RawRecord, rawLine []byte) Enriched {
 	if srcIp != "" {
 		if srcIsContainer {
 			src.Kind = "container"
-			// retrieve container id, name and veth
-			containerId, veth, err := e.ipamHandler.GetInfoByIp(srcIp)
-			if err != nil {
+			containerMeta, ok := e.Resolver.ResolveMap[srcIp]
+			if !ok {
 				src.Kind = "container_unresolved"
 			}
-			containerName, _ := e.csmHandler.GetContainerNameById(containerId)
-			src.ContainerId, src.ContainerName, src.Veth = containerId, containerName, veth
+			src.ContainerId, src.ContainerName, src.Veth, src.SpiffeId = containerMeta.ContainerId, containerMeta.ContainerName, containerMeta.Veth, containerMeta.SpiffeId
 		} else {
 			src.Kind = "external"
 		}
@@ -339,13 +447,11 @@ func (e *Enricher) enrich(rr RawRecord, rawLine []byte) Enriched {
 	if dstIp != "" {
 		if dstIsContainer {
 			dst.Kind = "container"
-			// retrieve container id, name and veth
-			containerId, veth, err := e.ipamHandler.GetInfoByIp(dstIp)
-			if err != nil {
-				src.Kind = "container_unresolved"
+			containerMeta, ok := e.Resolver.ResolveMap[dstIp]
+			if !ok {
+				dst.Kind = "container_unresolved"
 			}
-			containerName, _ := e.csmHandler.GetContainerNameById(containerId)
-			dst.ContainerId, dst.ContainerName, dst.Veth = containerId, containerName, veth
+			dst.ContainerId, dst.ContainerName, dst.Veth, dst.SpiffeId = containerMeta.ContainerId, containerMeta.ContainerName, containerMeta.Veth, containerMeta.SpiffeId
 		} else {
 			dst.Kind = "external"
 		}

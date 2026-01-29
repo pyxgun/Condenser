@@ -16,7 +16,7 @@ type NpmManager struct {
 
 func (m *NpmManager) GetEWMode() string {
 	var mode string
-	_ = m.npmStore.withLock(func(np *NetworkPolicy) error {
+	_ = m.npmStore.withRLock(func(np *NetworkPolicy) error {
 		mode = np.DefaultRule.EastWest.Mode
 		return nil
 	})
@@ -25,7 +25,7 @@ func (m *NpmManager) GetEWMode() string {
 
 func (m *NpmManager) GetNSMode() string {
 	var mode string
-	_ = m.npmStore.withLock(func(np *NetworkPolicy) error {
+	_ = m.npmStore.withRLock(func(np *NetworkPolicy) error {
 		mode = np.DefaultRule.NorthSouth.Mode
 		return nil
 	})
@@ -34,7 +34,7 @@ func (m *NpmManager) GetNSMode() string {
 
 func (m *NpmManager) GetEWLogging() bool {
 	var result bool
-	_ = m.npmStore.withLock(func(np *NetworkPolicy) error {
+	_ = m.npmStore.withRLock(func(np *NetworkPolicy) error {
 		result = np.DefaultRule.EastWest.Logging
 		return nil
 	})
@@ -43,7 +43,7 @@ func (m *NpmManager) GetEWLogging() bool {
 
 func (m *NpmManager) GetNSLogging() bool {
 	var result bool
-	_ = m.npmStore.withLock(func(np *NetworkPolicy) error {
+	_ = m.npmStore.withRLock(func(np *NetworkPolicy) error {
 		result = np.DefaultRule.NorthSouth.Logging
 		return nil
 	})
@@ -52,7 +52,7 @@ func (m *NpmManager) GetNSLogging() bool {
 
 func (m *NpmManager) IsNsEnforce() bool {
 	var result bool
-	_ = m.npmStore.withLock(func(np *NetworkPolicy) error {
+	_ = m.npmStore.withRLock(func(np *NetworkPolicy) error {
 		nsMode := np.DefaultRule.NorthSouth.Mode
 		if nsMode == "enforce" {
 			result = true
@@ -66,7 +66,7 @@ func (m *NpmManager) IsNsEnforce() bool {
 
 func (m *NpmManager) GetEWPolicyList() []Policy {
 	var policyList []Policy
-	_ = m.npmStore.withLock(func(np *NetworkPolicy) error {
+	_ = m.npmStore.withRLock(func(np *NetworkPolicy) error {
 		policyList = np.Policies.EastWestPolicy
 		return nil
 	})
@@ -75,7 +75,7 @@ func (m *NpmManager) GetEWPolicyList() []Policy {
 
 func (m *NpmManager) GetNSObsPolicyList() []Policy {
 	var policyList []Policy
-	_ = m.npmStore.withLock(func(np *NetworkPolicy) error {
+	_ = m.npmStore.withRLock(func(np *NetworkPolicy) error {
 		policyList = np.Policies.NorthSouthObservePolicy
 		return nil
 	})
@@ -84,7 +84,7 @@ func (m *NpmManager) GetNSObsPolicyList() []Policy {
 
 func (m *NpmManager) GetNSEnfPolicyList() []Policy {
 	var policyList []Policy
-	_ = m.npmStore.withLock(func(np *NetworkPolicy) error {
+	_ = m.npmStore.withRLock(func(np *NetworkPolicy) error {
 		policyList = np.Policies.NorthSouthEnforcePolicy
 		return nil
 	})
@@ -93,7 +93,7 @@ func (m *NpmManager) GetNSEnfPolicyList() []Policy {
 
 func (m *NpmManager) GetPolicyChain(policyId string) (string, error) {
 	var chainName string
-	err := m.npmStore.withLock(func(np *NetworkPolicy) error {
+	err := m.npmStore.withRLock(func(np *NetworkPolicy) error {
 		for _, p := range np.Policies.EastWestPolicy {
 			if p.Id != policyId {
 				continue

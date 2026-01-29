@@ -59,7 +59,7 @@ func (m *IlmManager) RemoveImage(repository string, reference string) error {
 func (s *IlmManager) GetBundlePath(repository string, reference string) (string, error) {
 	var bundlePath string
 
-	err := s.ilmStore.withLock(func(st *ImageLayerState) error {
+	err := s.ilmStore.withRLock(func(st *ImageLayerState) error {
 		bundlePath = st.Repositories[repository].References[reference].BundlePath
 		if bundlePath == "" {
 			return fmt.Errorf("bundle path not found.")
@@ -72,7 +72,7 @@ func (s *IlmManager) GetBundlePath(repository string, reference string) (string,
 func (s *IlmManager) GetConfigPath(repository string, reference string) (string, error) {
 	var configPath string
 
-	err := s.ilmStore.withLock(func(st *ImageLayerState) error {
+	err := s.ilmStore.withRLock(func(st *ImageLayerState) error {
 		configPath = st.Repositories[repository].References[reference].ConfigPath
 		if configPath == "" {
 			return fmt.Errorf("config path not found.")
@@ -85,7 +85,7 @@ func (s *IlmManager) GetConfigPath(repository string, reference string) (string,
 func (s *IlmManager) GetRootfsPath(repository string, reference string) (string, error) {
 	var rootfsPath string
 
-	err := s.ilmStore.withLock(func(st *ImageLayerState) error {
+	err := s.ilmStore.withRLock(func(st *ImageLayerState) error {
 		rootfsPath = st.Repositories[repository].References[reference].RootfsPath
 		if rootfsPath == "" {
 			return fmt.Errorf("bundle path not found.")
@@ -98,7 +98,7 @@ func (s *IlmManager) GetRootfsPath(repository string, reference string) (string,
 func (s *IlmManager) GetImageList() ([]ImageInfo, error) {
 	var imageList []ImageInfo
 
-	err := s.ilmStore.withLock(func(st *ImageLayerState) error {
+	err := s.ilmStore.withRLock(func(st *ImageLayerState) error {
 		for repo, refs := range st.Repositories {
 			for ref, info := range refs.References {
 				imageList = append(imageList, ImageInfo{
@@ -116,7 +116,7 @@ func (s *IlmManager) GetImageList() ([]ImageInfo, error) {
 func (s *IlmManager) IsImageExist(imageRepo, imageRef string) bool {
 	var result bool
 
-	s.ilmStore.withLock(func(st *ImageLayerState) error {
+	s.ilmStore.withRLock(func(st *ImageLayerState) error {
 		for repo, refs := range st.Repositories {
 			if repo != imageRepo {
 				continue
