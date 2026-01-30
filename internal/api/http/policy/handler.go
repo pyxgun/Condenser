@@ -4,7 +4,7 @@ import (
 	"condenser/internal/core/policy"
 	"net/http"
 
-	"condenser/internal/api/http/logs"
+	"condenser/internal/api/http/logger"
 	apimodel "condenser/internal/api/http/utils"
 
 	"github.com/go-chi/chi/v5"
@@ -38,7 +38,7 @@ func (h *RequestHandler) AddPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// set log: target
-	logs.SetTarget(r.Context(), logs.Target{
+	logger.SetTarget(r.Context(), logger.Target{
 		ChainName:   req.ChainName,
 		Source:      req.Source,
 		Destination: req.Destination,
@@ -82,7 +82,7 @@ func (h *RequestHandler) RemovePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// set log: target
-	logs.SetTarget(r.Context(), logs.Target{
+	logger.SetTarget(r.Context(), logger.Target{
 		PolicyId: policyId,
 	})
 

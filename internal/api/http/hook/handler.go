@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"strings"
 
-	"condenser/internal/api/http/logs"
+	"condenser/internal/api/http/logger"
 	apimodel "condenser/internal/api/http/utils"
 )
 
@@ -44,15 +44,15 @@ func (h *RequestHandler) ApplyHook(w http.ResponseWriter, r *http.Request) {
 	// set log: action
 	switch eventType {
 	case "createRuntime":
-		logs.SetAction(r.Context(), "hook.createRuntime")
+		logger.SetAction(r.Context(), "hook.createRuntime")
 	case "createContainer":
-		logs.SetAction(r.Context(), "hook.createContainer")
+		logger.SetAction(r.Context(), "hook.createContainer")
 	case "poststart":
-		logs.SetAction(r.Context(), "hook.poststart")
+		logger.SetAction(r.Context(), "hook.poststart")
 	case "stopContainer":
-		logs.SetAction(r.Context(), "hook.stopContainer")
+		logger.SetAction(r.Context(), "hook.stopContainer")
 	case "poststop":
-		logs.SetAction(r.Context(), "hook.poststop")
+		logger.SetAction(r.Context(), "hook.poststop")
 	}
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
@@ -67,7 +67,7 @@ func (h *RequestHandler) ApplyHook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// set log: target
-	logs.SetTarget(r.Context(), logs.Target{
+	logger.SetTarget(r.Context(), logger.Target{
 		ContainerId: st.Id,
 	})
 
@@ -105,7 +105,7 @@ func (h *RequestHandler) validateSpiffe(r *http.Request, state hook.ServiceState
 		// retrieve container id
 		path := strings.TrimPrefix(u.Path, "/")
 		parts := strings.Split(path, "/")
-		if len(parts) != 2 || parts[0] != "hook" {
+		if len(parts) != 2 || parts[0] != "container" {
 			return false, fmt.Errorf("invalid spiffe path: %s", path)
 		}
 		containerId := parts[1]

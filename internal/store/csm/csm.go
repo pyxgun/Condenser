@@ -15,13 +15,14 @@ type CsmManager struct {
 	csmStore *CsmStore
 }
 
-func (m *CsmManager) StoreContainer(containerId string, state string, pid int, repo, ref string, command []string, name string) error {
+func (m *CsmManager) StoreContainer(containerId string, state string, pid int, tty bool, repo, ref string, command []string, name string) error {
 	return m.csmStore.withLock(func(st *ContainerState) error {
 		st.Containers[containerId] = ContainerInfo{
 			ContainerId:   containerId,
 			ContainerName: name,
 			State:         state,
 			Pid:           pid,
+			Tty:           tty,
 			Repository:    repo,
 			Reference:     ref,
 			Command:       command,
@@ -70,9 +71,21 @@ func (m *CsmManager) UpdateContainer(containerId string, state string, pid int) 
 	})
 }
 
+func (m *CsmManager) UpdateSpiffe(containerId string, spiffe string) error {
+	return m.csmStore.withLock(func(st *ContainerState) error {
+		c, ok := st.Containers[containerId]
+		if !ok {
+			return fmt.Errorf("containerId=%s not found", containerId)
+		}
+		c.SpiffeId = spiffe
+		st.Containers[containerId] = c
+		return nil
+	})
+}
+
 func (m *CsmManager) GetContainerList() ([]ContainerInfo, error) {
 	var containerList []ContainerInfo
-	err := m.csmStore.withLock(func(st *ContainerState) error {
+	err := m.csmStore.withRLock(func(st *ContainerState) error {
 		for _, c := range st.Containers {
 			containerList = append(containerList, c)
 		}
@@ -83,7 +96,7 @@ func (m *CsmManager) GetContainerList() ([]ContainerInfo, error) {
 
 func (m *CsmManager) GetContainerById(containerId string) (ContainerInfo, error) {
 	var containerInfo ContainerInfo
-	err := m.csmStore.withLock(func(st *ContainerState) error {
+	err := m.csmStore.withRLock(func(st *ContainerState) error {
 		for _, c := range st.Containers {
 			if c.ContainerId != containerId {
 				continue
@@ -98,7 +111,7 @@ func (m *CsmManager) GetContainerById(containerId string) (ContainerInfo, error)
 
 func (m *CsmManager) IsNameAlreadyUsed(name string) bool {
 	var result bool
-	_ = m.csmStore.withLock(func(st *ContainerState) error {
+	_ = m.csmStore.withRLock(func(st *ContainerState) error {
 		for _, c := range st.Containers {
 			if c.ContainerName != name {
 				continue
@@ -114,7 +127,7 @@ func (m *CsmManager) IsNameAlreadyUsed(name string) bool {
 
 func (m *CsmManager) GetContainerIdByName(name string) (string, error) {
 	var containerId string
-	err := m.csmStore.withLock(func(st *ContainerState) error {
+	err := m.csmStore.withRLock(func(st *ContainerState) error {
 		for _, c := range st.Containers {
 			if c.ContainerName != name {
 				continue
@@ -129,7 +142,7 @@ func (m *CsmManager) GetContainerIdByName(name string) (string, error) {
 
 func (m *CsmManager) GetContainerNameById(containerId string) (string, error) {
 	var containerName string
-	err := m.csmStore.withLock(func(st *ContainerState) error {
+	err := m.csmStore.withRLock(func(st *ContainerState) error {
 		for _, c := range st.Containers {
 			if c.ContainerId != containerId {
 				continue
@@ -140,6 +153,21 @@ func (m *CsmManager) GetContainerNameById(containerId string) (string, error) {
 		return fmt.Errorf("container: %s not found", containerId)
 	})
 	return containerName, err
+}
+
+func (m *CsmManager) GetSpiffeById(containerId string) (string, error) {
+	var spiffe string
+	err := m.csmStore.withRLock(func(st *ContainerState) error {
+		for _, c := range st.Containers {
+			if c.ContainerId != containerId {
+				continue
+			}
+			spiffe = c.SpiffeId
+			return nil
+		}
+		return fmt.Errorf("container: %s not found", containerId)
+	})
+	return spiffe, err
 }
 
 func (m *CsmManager) GetContainerIdAndName(str string) (id, name string, err error) {

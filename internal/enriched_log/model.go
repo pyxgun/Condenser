@@ -5,6 +5,7 @@ type ContainerMeta struct {
 	ContainerName string `json:"container_name"`
 	Ipv4          string `json:"ip"`
 	Veth          string `json:"veth,omitempty"`
+	SpiffeId      string `json:"spiffe_id,omitempty"`
 }
 
 type Endpoint struct {
@@ -13,6 +14,7 @@ type Endpoint struct {
 	Port          int    `json:"port,omitempty"`
 	ContainerId   string `json:"container_id,omitempty"`
 	ContainerName string `json:"container_name,omitempty"`
+	SpiffeId      string `json:"spiffe_id,omitempty"`
 	Veth          string `json:"veth,omitempty"`
 }
 

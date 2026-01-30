@@ -3,9 +3,14 @@ package monitor
 import (
 	"condenser/internal/store/csm"
 	"condenser/internal/utils"
+	"context"
 	"log"
+	"path/filepath"
+	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 func NewContainerMonitor() *ContainerMonitor {
@@ -19,16 +24,23 @@ type ContainerMonitor struct {
 }
 
 func (m *ContainerMonitor) Start() error {
+	resolver := NewResolver(m.csmHandler)
+	// watch CSM file update
+	go func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		if err := resolver.Watch(ctx); err != nil {
+			log.Printf("watch stopped: %v", err)
+		}
+	}()
+
 	for {
 		time.Sleep(100 * time.Millisecond)
 
-		// get container list
-		containerList, _ := m.csmHandler.GetContainerList()
-
-		for _, container := range containerList {
+		for _, container := range resolver.ResolveMap {
 			// status check
 			// monitoring target: created, running
-			if container.State != "running" && container.State != "created" {
+			if container.Status != "running" && container.Status != "created" {
 				continue
 			}
 			// send keep alive
@@ -69,4 +81,86 @@ func (m *ContainerMonitor) pidAlive(pid int) (bool, error) {
 	}
 	// other signal: process not exist
 	return false, nil
+}
+
+func NewResolver(csmHandler csm.CsmHandler) *Resolver {
+	resolver := &Resolver{
+		ResolveMap: map[string]ContainerMeta{},
+		csmHandler: csmHandler,
+	}
+	containerList, _ := csmHandler.GetContainerList()
+	for _, c := range containerList {
+		if _, ok := resolver.ResolveMap[c.ContainerId]; !ok {
+			resolver.ResolveMap[c.ContainerId] = ContainerMeta{
+				ContainerId:   c.ContainerId,
+				ContainerName: c.ContainerName,
+				SpiffeId:      c.SpiffeId,
+				Status:        c.State,
+				Pid:           c.Pid,
+			}
+		}
+	}
+	return resolver
+}
+
+type Resolver struct {
+	ResolveMap map[string]ContainerMeta
+	csmHandler csm.CsmHandler
+}
+
+func (r *Resolver) Refresh() {
+	r.ResolveMap = map[string]ContainerMeta{}
+	containerList, _ := r.csmHandler.GetContainerList()
+	for _, c := range containerList {
+		if _, ok := r.ResolveMap[c.ContainerId]; !ok {
+			r.ResolveMap[c.ContainerId] = ContainerMeta{
+				ContainerId:   c.ContainerId,
+				ContainerName: c.ContainerName,
+				SpiffeId:      c.SpiffeId,
+				Status:        c.State,
+				Pid:           c.Pid,
+			}
+		}
+	}
+}
+
+func (r *Resolver) Watch(ctx context.Context) error {
+	w, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+
+	dir := filepath.Dir(utils.CsmStorePath)
+	base := filepath.Base(utils.CsmStorePath)
+
+	if err := w.Add(dir); err != nil {
+		return err
+	}
+
+	var pending atomic.Bool
+	trigger := func() {
+		if pending.CompareAndSwap(false, true) {
+			go func() {
+				time.Sleep(50 * time.Millisecond)
+				r.Refresh()
+				pending.Store(false)
+			}()
+		}
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case ev := <-w.Events:
+			if filepath.Base(ev.Name) != base {
+				continue
+			}
+			if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename) != 0 {
+				trigger()
+			}
+		case <-w.Errors:
+		}
+	}
 }

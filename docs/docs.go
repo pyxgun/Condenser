@@ -212,6 +212,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/containers/{containerId}/log": {
+            "get": {
+                "description": "get container log",
+                "tags": [
+                    "containers"
+                ],
+                "summary": "get container log",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Container ID",
+                        "name": "containerId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/hooks/droplet": {
             "post": {
                 "description": "apply hook from droplet",
@@ -495,6 +521,12 @@ const docTemplate = `{
                         "-c",
                         "echo hello; sleep 60"
                     ]
+                },
+                "env": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "image": {
                     "type": "string",

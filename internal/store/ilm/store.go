@@ -55,6 +55,38 @@ func (s *IlmStore) withLock(fn func(st *ImageLayerState) error) error {
 	return s.atomicSave(st)
 }
 
+func (s *IlmStore) withRLock(fn func(st *ImageLayerState) error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	lockPath := s.path + ".lock"
+	if err := s.filesystemHandler.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+		return err
+	}
+
+	lf, err := s.filesystemHandler.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	defer lf.Close()
+
+	if err := s.filesystemHandler.Flock(int(lf.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	defer s.filesystemHandler.Flock(int(lf.Fd()), syscall.LOCK_UN)
+
+	st, err := s.loadOrInit()
+	if err != nil {
+		return err
+	}
+
+	if err := fn(st); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *IlmStore) loadOrInit() (*ImageLayerState, error) {
 	b, err := s.filesystemHandler.ReadFile(s.path)
 	if err != nil {

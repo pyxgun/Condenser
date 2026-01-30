@@ -246,37 +246,37 @@ func (m *CertManager) isFileExists(path string) bool {
 func (m *CertManager) IssueClientCertFromCSR(
 	csr *x509.CertificateRequest, caCert *x509.Certificate, caKey *rsa.PrivateKey,
 	spiffe *url.URL, id string, validFor time.Duration,
-) ([]byte, error) {
+) ([]byte, string, string, error) {
 	// validate container id
 	path := strings.TrimPrefix(spiffe.Path, "/")
 	parts := strings.Split(path, "/")
-	if len(parts) != 2 || parts[0] != "hook" {
-		return nil, fmt.Errorf("invalid SPIFFE ID format")
+	if len(parts) != 2 || parts[0] != "container" {
+		return nil, "", "", fmt.Errorf("invalid SPIFFE ID format")
 	}
 	containerId := parts[1]
 	if containerId == "" {
-		return nil, fmt.Errorf("container id empty")
+		return nil, "", "", fmt.Errorf("container id empty")
 	}
 	// check if the container id exxist
 	if ok := m.csmHandler.IsContainerExist(containerId); !ok {
-		return nil, fmt.Errorf("invalid container id")
+		return nil, "", "", fmt.Errorf("invalid container id")
 	}
 	// check the current contianer status is creating
 	containerInfo, _ := m.csmHandler.GetContainerById(containerId)
 	if containerInfo.State != "creating" {
-		return nil, fmt.Errorf("invalid container id")
+		return nil, "", "", fmt.Errorf("invalid container id")
 	}
 
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
-		return nil, err
+		return nil, "", "", err
 	}
 
 	// re-build SPIFFE ID
 	newSpiffeId := url.URL{
 		Scheme: "spiffe",
 		Host:   "raind",
-		Path:   "hook/" + containerInfo.ContainerId,
+		Path:   "container/" + containerInfo.ContainerId,
 	}
 
 	template := &x509.Certificate{
@@ -295,7 +295,8 @@ func (m *CertManager) IssueClientCertFromCSR(
 		URIs: []*url.URL{&newSpiffeId},
 	}
 
-	return x509.CreateCertificate(rand.Reader, template, caCert, csr.PublicKey, caKey)
+	certDer, err := x509.CreateCertificate(rand.Reader, template, caCert, csr.PublicKey, caKey)
+	return certDer, containerId, newSpiffeId.String(), err
 }
 
 func LoadCertPoolFromFile(path string) (*x509.CertPool, error) {

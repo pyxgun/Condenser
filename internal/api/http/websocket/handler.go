@@ -1,7 +1,7 @@
 package websocket
 
 import (
-	"condenser/internal/api/http/logs"
+	"condenser/internal/api/http/logger"
 	"condenser/internal/store/csm"
 	"condenser/internal/utils"
 	"context"
@@ -81,7 +81,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// set log: target
 	log_containerId, log_containerName, _ := h.csmHandler.GetContainerIdAndName(containerId)
-	logs.SetTarget(r.Context(), logs.Target{
+	logger.SetTarget(r.Context(), logger.Target{
 		ContainerId:   log_containerId,
 		ContainerName: log_containerName,
 	})

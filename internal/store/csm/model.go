@@ -5,8 +5,10 @@ import "time"
 type ContainerInfo struct {
 	ContainerId   string    `json:"containerId"`
 	ContainerName string    `json:"name"`
+	SpiffeId      string    `json:"spiffeId"`
 	State         string    `json:"state"`
 	Pid           int       `json:"pid"`
+	Tty           bool      `json:"tty"`
 	Repository    string    `json:"imageRepository"`
 	Reference     string    `json:"imageReference"`
 	Command       []string  `json:"command"`

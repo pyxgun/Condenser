@@ -172,7 +172,7 @@ func isCertificateExist(st State) bool {
 }
 
 func generateCsr(st State) error {
-	spiffeId := "spiffe://raind/hook/" + st.ContainerId
+	spiffeId := "spiffe://raind/container/" + st.ContainerId
 	csrPath := "/etc/raind/container/" + st.ContainerId + "/cert/req.csr"
 	keyPath := "/etc/raind/container/" + st.ContainerId + "/cert/client.key"
 

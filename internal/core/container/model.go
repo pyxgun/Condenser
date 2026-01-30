@@ -9,6 +9,7 @@ type ServiceCreateModel struct {
 	Command []string
 	Port    []string
 	Mount   []string
+	Env     []string
 	Network string
 	Tty     bool
 	Name    string

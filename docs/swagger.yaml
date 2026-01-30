@@ -9,6 +9,10 @@ definitions:
         items:
           type: string
         type: array
+      env:
+        items:
+          type: string
+        type: array
       image:
         example: alpine:latest
         type: string
@@ -240,6 +244,23 @@ paths:
           schema:
             $ref: '#/definitions/utils.ApiResponse'
       summary: stop a container
+      tags:
+      - containers
+  /v1/containers/{containerId}/log:
+    get:
+      description: get container log
+      parameters:
+      - description: Container ID
+        in: path
+        name: containerId
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.ApiResponse'
+      summary: get container log
       tags:
       - containers
   /v1/hooks/droplet:

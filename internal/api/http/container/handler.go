@@ -5,10 +5,11 @@ import (
 	"condenser/internal/store/csm"
 	"condenser/internal/utils"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
-	"condenser/internal/api/http/logs"
+	"condenser/internal/api/http/logger"
 	apimodel "condenser/internal/api/http/utils"
 )
 
@@ -42,7 +43,7 @@ func (h *RequestHandler) CreateContainer(w http.ResponseWriter, r *http.Request)
 	}
 
 	// set log: target
-	logs.SetTarget(r.Context(), logs.Target{
+	logger.SetTarget(r.Context(), logger.Target{
 		ContainerName: req.Name,
 		ImageRef:      req.Image,
 		Command:       req.Command,
@@ -59,6 +60,7 @@ func (h *RequestHandler) CreateContainer(w http.ResponseWriter, r *http.Request)
 			Command: req.Command,
 			Port:    req.Port,
 			Mount:   req.Mount,
+			Env:     req.Env,
 			Network: req.Network,
 			Tty:     req.Tty,
 			Name:    req.Name,
@@ -97,7 +99,7 @@ func (h *RequestHandler) StartContainer(w http.ResponseWriter, r *http.Request) 
 
 	// set log: target
 	log_containerId, log_containerName, _ := h.csmHandler.GetContainerIdAndName(containerId)
-	logs.SetTarget(r.Context(), logs.Target{
+	logger.SetTarget(r.Context(), logger.Target{
 		ContainerId:   log_containerId,
 		ContainerName: log_containerName,
 		Tty:           req.Tty,
@@ -135,7 +137,7 @@ func (h *RequestHandler) StopContainer(w http.ResponseWriter, r *http.Request) {
 
 	// set log: target
 	log_containerId, log_containerName, _ := h.csmHandler.GetContainerIdAndName(containerId)
-	logs.SetTarget(r.Context(), logs.Target{
+	logger.SetTarget(r.Context(), logger.Target{
 		ContainerId:   log_containerId,
 		ContainerName: log_containerName,
 	})
@@ -179,7 +181,7 @@ func (h *RequestHandler) ExecContainer(w http.ResponseWriter, r *http.Request) {
 
 	// set log: target
 	log_containerId, log_containerName, _ := h.csmHandler.GetContainerIdAndName(containerId)
-	logs.SetTarget(r.Context(), logs.Target{
+	logger.SetTarget(r.Context(), logger.Target{
 		ContainerId:   log_containerId,
 		ContainerName: log_containerName,
 		Command:       req.Command,
@@ -216,7 +218,7 @@ func (h *RequestHandler) DeleteContainer(w http.ResponseWriter, r *http.Request)
 
 	// set log: target
 	log_containerId, log_containerName, _ := h.csmHandler.GetContainerIdAndName(containerId)
-	logs.SetTarget(r.Context(), logs.Target{
+	logger.SetTarget(r.Context(), logger.Target{
 		ContainerId:   log_containerId,
 		ContainerName: log_containerName,
 	})
@@ -270,7 +272,7 @@ func (h *RequestHandler) GetContainerById(w http.ResponseWriter, r *http.Request
 
 	// set log: target
 	log_containerId, log_containerName, _ := h.csmHandler.GetContainerIdAndName(containerId)
-	logs.SetTarget(r.Context(), logs.Target{
+	logger.SetTarget(r.Context(), logger.Target{
 		ContainerId:   log_containerId,
 		ContainerName: log_containerName,
 	})
@@ -284,4 +286,36 @@ func (h *RequestHandler) GetContainerById(w http.ResponseWriter, r *http.Request
 
 	// encode response
 	apimodel.RespondSuccess(w, http.StatusOK, "retrieve container info success", containerInfo)
+}
+
+// GetContainerLog godoc
+// @Summary get container log
+// @Description get container log
+// @Tags containers
+// @Param containerId path string true "Container ID"
+// @Success 200 {object} apimodel.ApiResponse
+// @Router /v1/containers/{containerId}/log [get]
+func (h *RequestHandler) GetContainerLog(w http.ResponseWriter, r *http.Request) {
+	containerId := chi.URLParam(r, "containerId")
+	if containerId == "" {
+		apimodel.RespondFail(w, http.StatusBadRequest, "missing container Id", nil)
+		return
+	}
+	query := r.URL.Query()
+
+	if s := query.Get("tail_lines"); s != "" {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			apimodel.RespondFail(w, http.StatusBadRequest, "invalid tail_lines", nil)
+			return
+		}
+		data, err := h.serviceHandler.GetLogWithTailLines(containerId, n)
+		if err != nil {
+			apimodel.RespondFail(w, http.StatusInternalServerError, "tail failed: "+err.Error(), nil)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write(data)
+		return
+	}
 }

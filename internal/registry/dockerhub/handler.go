@@ -597,6 +597,12 @@ func (s *RegistryDockerHub) applyOneLayer(rootfs, layerBlobPath string) error {
 			}
 			_ = s.applyOwner(dstPath, hdr, false)
 
+		case tar.TypeChar, tar.TypeBlock, tar.TypeFifo:
+			if strings.HasPrefix(name, "dev/") {
+				continue
+			}
+			return fmt.Errorf("special file not supported: typefalg %v for %s", hdr.Typeflag, hdr.Name)
+
 		default:
 			return fmt.Errorf("unsupported tar typeflag %v for %s", hdr.Typeflag, hdr.Name)
 		}

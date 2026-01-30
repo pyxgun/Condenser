@@ -67,7 +67,7 @@ func (m *IpamManager) Release(containerId string) error {
 func (m *IpamManager) GetNetworkList() ([]NetworkList, error) {
 	var networkList []NetworkList
 
-	err := m.ipamStore.withLock(func(st *IpamState) error {
+	err := m.ipamStore.withRLock(func(st *IpamState) error {
 		for _, p := range st.Pools {
 			networkList = append(networkList, NetworkList{
 				Interface: p.Interface,
@@ -85,7 +85,7 @@ func (m *IpamManager) GetNetworkList() ([]NetworkList, error) {
 func (m *IpamManager) GetRuntimeSubnet() (string, error) {
 	var runtimeSubnet string
 
-	err := m.ipamStore.withLock(func(st *IpamState) error {
+	err := m.ipamStore.withRLock(func(st *IpamState) error {
 		runtimeSubnet = st.RuntimeSubnet
 		if runtimeSubnet == "" {
 			return fmt.Errorf("runtime subnet is not configured")
@@ -98,7 +98,7 @@ func (m *IpamManager) GetRuntimeSubnet() (string, error) {
 func (m *IpamManager) GetDefaultInterface() (string, error) {
 	var defaultInterface string
 
-	err := m.ipamStore.withLock(func(st *IpamState) error {
+	err := m.ipamStore.withRLock(func(st *IpamState) error {
 		defaultInterface = st.HostInterface
 		if defaultInterface == "" {
 			return fmt.Errorf("default interface is not configured")
@@ -111,7 +111,7 @@ func (m *IpamManager) GetDefaultInterface() (string, error) {
 func (m *IpamManager) GetDefaultInterfaceAddr() (string, error) {
 	var defaultInterfaceAddr string
 
-	err := m.ipamStore.withLock(func(st *IpamState) error {
+	err := m.ipamStore.withRLock(func(st *IpamState) error {
 		defaultInterfaceAddr = st.HostInterfaceAddr
 		if defaultInterfaceAddr == "" {
 			return fmt.Errorf("default interface address is not configured")
@@ -124,7 +124,7 @@ func (m *IpamManager) GetDefaultInterfaceAddr() (string, error) {
 func (m *IpamManager) GetBridgeAddr(bridgeInterface string) (string, error) {
 	var bridgeAddr string
 
-	err := m.ipamStore.withLock(func(st *IpamState) error {
+	err := m.ipamStore.withRLock(func(st *IpamState) error {
 		for _, p := range st.Pools {
 			if p.Interface != bridgeInterface {
 				continue
@@ -144,7 +144,7 @@ func (m *IpamManager) GetContainerAddress(containerId string) (string, string, s
 		bridgeInterface string
 	)
 
-	err := m.ipamStore.withLock(func(st *IpamState) error {
+	err := m.ipamStore.withRLock(func(st *IpamState) error {
 		hostInterface = st.HostInterface
 		for _, p := range st.Pools {
 			for addr, info := range p.Allocations {
@@ -193,7 +193,7 @@ func (m *IpamManager) SetForwardInfo(containerId string, sport, dport int, proto
 
 func (m *IpamManager) GetForwardInfo(containerId string) ([]ForwardInfo, error) {
 	var forwards []ForwardInfo
-	err := m.ipamStore.withLock(func(st *IpamState) error {
+	err := m.ipamStore.withRLock(func(st *IpamState) error {
 		for _, p := range st.Pools {
 			if p.Allocations == nil {
 				continue
@@ -214,7 +214,7 @@ func (m *IpamManager) GetForwardInfo(containerId string) ([]ForwardInfo, error) 
 
 func (m *IpamManager) GetPoolList() ([]Pool, error) {
 	var poolList []Pool
-	err := m.ipamStore.withLock(func(st *IpamState) error {
+	err := m.ipamStore.withRLock(func(st *IpamState) error {
 		for _, p := range st.Pools {
 			poolList = append(poolList, p)
 		}
@@ -228,7 +228,7 @@ func (m *IpamManager) GetNetworkInfoById(containerId string) (string, Allocation
 		address     string
 		networkInfo Allocation
 	)
-	err := m.ipamStore.withLock(func(st *IpamState) error {
+	err := m.ipamStore.withRLock(func(st *IpamState) error {
 		for _, p := range st.Pools {
 			for addr, info := range p.Allocations {
 				if info.ContainerId != containerId {
@@ -246,7 +246,7 @@ func (m *IpamManager) GetNetworkInfoById(containerId string) (string, Allocation
 
 func (m *IpamManager) GetVethById(containerId string) (string, error) {
 	var veth string
-	err := m.ipamStore.withLock(func(st *IpamState) error {
+	err := m.ipamStore.withRLock(func(st *IpamState) error {
 		for _, p := range st.Pools {
 			for _, info := range p.Allocations {
 				if info.ContainerId != containerId {
@@ -266,7 +266,7 @@ func (m *IpamManager) GetInfoByIp(ip string) (string, string, error) {
 		containerId string
 		veth        string
 	)
-	err := m.ipamStore.withLock(func(st *IpamState) error {
+	err := m.ipamStore.withRLock(func(st *IpamState) error {
 		for _, p := range st.Pools {
 			for addr, info := range p.Allocations {
 				if addr != ip {

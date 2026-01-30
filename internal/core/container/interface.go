@@ -8,6 +8,7 @@ type ContainerServiceHandler interface {
 	Exec(execParameter ServiceExecModel) error
 	GetContainerList() ([]ContainerState, error)
 	GetContainerById(containerId string) (ContainerState, error)
+	GetLogWithTailLines(containerId string, n int) ([]byte, error)
 }
 
 type CgroupServiceHandler interface {
